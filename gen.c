@@ -7,6 +7,8 @@ static void emit_global_decl(Node *node);
 static void ensure_gvar_init(Node *node);
 static void emit_gsave(char *varname);
 static void emit_expr(Node *node);
+static void emit_literal(Node *node);
+static void emit_binary(Node *node);
 
 static char *get_resigter_size();
 static void emitf(int line, char *fmt, ...);
@@ -65,9 +67,23 @@ static void emit_global_decl(Node *node) {
     emit_gsave(node->varname);
 }
 
-static void emit_expr(Node *node) {}
+static void emit_literal(Node *node) { emit("mov $%s, #rax", node->val); }
 
-static void ensure_gvar_init(Node *node) {
+static void emit_expr(Node *node) {
+    switch(node->kind) {
+    case AST_LITERAL:
+        emit_literal(node);
+        break;
+
+    default:
+        emit_binary(node);
+        break;
+    }
+}
+
+static void ensure_gvar_init(Node *node) { emit_expr(node); }
+
+static void emit_binary(Node *node) {
     char *op = NULL;
     switch(node->kind) {
     case AST_ADD:
@@ -79,9 +95,6 @@ static void ensure_gvar_init(Node *node) {
     case AST_MUL:
         op = "imul";
         break;
-    case AST_DIV:
-        op = "div";
-        break;
     }
 
     emit_expr(node->left);
@@ -90,7 +103,11 @@ static void ensure_gvar_init(Node *node) {
     emit("mov #rax, #rcx");
     pop("rax");
 
-    emit("%s #rcx, #rax", op);
+    if(node->kind == AST_DIV) {
+        emit("div #rcx");
+    } else {
+        emit("%s #rcx, #rax", op);
+    }
 }
 
 static void emit_gsave(char *varname) {
