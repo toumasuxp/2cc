@@ -104,6 +104,7 @@ static void emit_binary(Node *node) {
     pop("rax");
 
     if(node->kind == AST_DIV) {
+        emit("xor #edx, #edx");
         emit("div #rcx");
     } else {
         emit("%s #rcx, #rax", op);

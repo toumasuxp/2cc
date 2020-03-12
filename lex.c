@@ -13,6 +13,9 @@ static Token *make_num_token(char *num);
 static Token *make_newline_token();
 static Token *make_eof_token();
 static Token *read_plus();
+static Token *read_sub();
+static Token *read_mult();
+static Token *read_div();
 static Token *make_ident_token(char *buf);
 
 static Token *read_equal(int c);
@@ -47,6 +50,10 @@ Token *lex() {
         return read_equal(c);
     case '+':
         return read_plus();
+    case '*':
+        return read_mult();
+    case '/':
+        return read_div();
     case '\n':
         return make_newline_token();
     case EOF:
@@ -152,6 +159,23 @@ static Token *read_plus() {
     return tok;
 }
 
+static Token *read_sub() {
+    Token *tok = (Token *)malloc(sizeof(Token));
+    tok->kind = T_SUB;
+    return tok;
+}
+
+static Token *read_mult() {
+    Token *tok = (Token *)malloc(sizeof(Token));
+    tok->kind = T_MUL;
+    return tok;
+}
+
+static Token *read_div() {
+    Token *tok = (Token *)malloc(sizeof(Token));
+    tok->kind = T_DIV;
+    return tok;
+}
 static Token *make_eof_token() {
     Token *tok = (Token *)malloc(sizeof(Token));
     tok->kind = T_EOF;
