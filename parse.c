@@ -3,13 +3,18 @@
 static Vector *node_vec;
 static Vector *top_levels;
 
-static void make_ident_node(Token *ident_token);
-static void make_eof_node();
+static Node *make_ident_node(Token *ident_token);
 static Node *make_assign_node(Token *ident_token);
 static Node *make_literal_node();
 static Node *make_mul_sub_node();
 static Node *make_add_sub_node();
 static Node *make_binary_node(int kind, Node *left, Node *right);
+static Node *make_if_node();
+static Node *make_cond_node();
+static Node *make_newline_node();
+static Node *make_eof_node();
+static Node *read_stmt();
+static Node *make_component_node();
 
 void parse_init() {
     top_levels = vec_init();
@@ -22,13 +27,16 @@ void parse_toplevel() {
         token = lex();
         switch(get_token_kind(token)) {
         case T_IDENT:
-            make_ident_node(token);
+            vec_push(node_vec, make_ident_node(token));
             continue;
-
+        case T_IF:
+            vec_push(node_vec, make_if_node());
+            continue;
         case T_NEWLINE:
+            vec_push(node_vec, make_newline_node());
             continue;
         case T_EOF:
-            make_eof_node();
+            vec_push(node_vec, make_eof_node());
             return;
         default:
             printf("parrser error\n");
@@ -37,12 +45,12 @@ void parse_toplevel() {
     }
 }
 
-static void make_ident_node(Token *ident_token) {
+static Node *make_ident_node(Token *ident_token) {
     Node *node;
     if(next_token(T_ASSIGN)) {
-        node = make_assign_node(ident_token);
-        vec_push(node_vec, node);
+        return make_assign_node(ident_token);
     }
+    return NULL;
 }
 
 static Node *make_binary_node(int kind, Node *left, Node *right) {
@@ -95,12 +103,66 @@ static Node *make_assign_node(Token *ident_token) {
     return self;
 }
 
-static void make_eof_node() {
+static Node *make_cond_node() { return make_add_sub_node(); }
+
+static Node *make_if_node() {
+    ensure_token(T_LPAREN);
+    Node *cond = make_cond_node();
+    ensure_token(T_RPAREN);
+
+    Node *then;
+    if(expect_token(T_LBRACE)) {
+        then = make_component_node();
+    } else {
+        then = read_stmt();
+    }
+
     Node *node = (Node *)malloc(sizeof(Node));
-    node->kind = AST_END;
-    node->varname = NULL;
-    node->val = NULL;
-    vec_push(node_vec, node);
+    node->kind = AST_IF;
+    node->cond = cond;
+    node->then = then;
+    return node;
+}
+
+static Node *read_stmt() {
+    Token *token = lex();
+    switch(get_token_kind(token)) {
+    case T_LBRACE:
+        return make_component_node();
+    case T_IF:
+        return make_if_node();
+    case T_NEWLINE:
+        return make_newline_node();
+    case T_EOF:
+        return make_eof_node();
+    default:
+        return make_ident_node(token);
+    }
+}
+
+static Node *make_component_node() {
+    Vector *component = vec_init();
+
+    while(!expect_token(T_RBRACE)) {
+        vec_push(component, read_stmt());
+    }
+
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_COMPONENT;
+    node->stmt = component;
+    return node;
+}
+
+static Node *make_newline_node() {
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_NEWLINE;
+    return node;
+}
+
+static Node *make_eof_node() {
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_EOF;
+    return node;
 }
 
 Vector *get_top_levels() { return node_vec; }

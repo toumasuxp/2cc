@@ -1,11 +1,11 @@
 #pragma once
 
+#include <ctype.h>
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
-#include <stdbool.h>
-#include <stdarg.h>
 
 // types
 
@@ -20,6 +20,7 @@ enum {
     T_MUL,
     T_DIV,
     T_NEWLINE,
+    T_IF,
     T_IDENT,
     T_ASSIGN,
     T_LPAREN,
@@ -37,8 +38,16 @@ enum {
     AST_MUL,
     AST_DIV,
     AST_LITERAL,
+    AST_COMPONENT,
+    AST_IF,
+    AST_NEWLINE,
+    AST_EOF,
     AST_END,
 };
+
+typedef struct _Buffer Buffer;
+
+typedef struct _Vector Vector;
 
 typedef struct _Node Node;
 
@@ -60,12 +69,17 @@ struct _Node {
             struct _Node *left;
             struct _Node *right;
         };
+
+        // if statement
+        struct {
+            struct _Node *cond;
+            struct _Node *then;
+        };
+
+        // statement
+        Vector *stmt;
     };
 };
-
-typedef struct _Buffer Buffer;
-
-typedef struct _Vector Vector;
 
 // main.c
 
@@ -86,6 +100,7 @@ bool next_token(int kind);
 void unread_token(Token *token);
 Token *peek_token();
 bool expect_token(int kind);
+void ensure_token(int kind);
 char *get_token_val(Token *token);
 
 // parse.c

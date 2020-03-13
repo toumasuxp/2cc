@@ -5,6 +5,13 @@ struct _Token {
     char *val;
 };
 
+struct KeyWord {
+    int kind;
+    char *ident;
+};
+
+static struct KeyWord keywords[] = {{T_IF, "if"}};
+
 static Vector *token_buf = NULL;
 
 static Token *read_number(int c);
@@ -21,6 +28,9 @@ static Token *make_ident_token(char *buf);
 static Token *read_equal(int c);
 static Token *make_equal_token();
 static Token *make_op_token(int kind);
+static Token *make_keyword_token(char *buf);
+
+static bool is_keyword(char *buf);
 
 int get_token_kind(Token *token) { return token->kind; }
 
@@ -63,6 +73,8 @@ Token *lex() {
         return make_newline_token();
     case EOF:
         return make_eof_token();
+    default:
+        return make_eof_token();
     }
 }
 
@@ -85,6 +97,16 @@ bool expect_token(int kind) {
     Token *token = lex();
     unread_token(token);
     return get_token_kind(token) == kind;
+}
+
+void ensure_token(int kind) {
+    Token *token = lex();
+    if(get_token_kind(token) == kind) {
+        return;
+    } else {
+        printf("ERROR: invalid token %s", get_token_val(token));
+        exit(1);
+    }
 }
 
 void unread_token(Token *token) {
@@ -122,7 +144,12 @@ static Token *read_ident(int c) {
         if(!isalnum(c) && c != '_') {
             unreadc(c);
             buf_write(buf, '\0');
-            return make_ident_token(buf_get_body(buf));
+            char *b = buf_get_body(buf);
+
+            if(is_keyword(b))
+                return make_keyword_token(b);
+
+            return make_ident_token(b);
         }
         buf_write(buf, c);
     }
@@ -192,4 +219,26 @@ static Token *make_op_token(int kind) {
     Token *tok = (Token *)malloc(sizeof(Token));
     tok->kind = kind;
     return tok;
+}
+
+static bool is_keyword(char *buf) {
+    struct KeyWord *key;
+    for(key = keywords; key != NULL; key++) {
+        if(!strcmp(buf, key->ident)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static Token *make_keyword_token(char *buf) {
+    struct KeyWord *key;
+    for(key = keywords; key != NULL; key++) {
+        if(!strcmp(buf, key->ident)) {
+            Token *token = (Token *)malloc(sizeof(Token));
+            token->kind = key->kind;
+            return token;
+        }
+    }
+    return NULL;
 }

@@ -9,9 +9,15 @@ static void emit_gsave(char *varname);
 static void emit_expr(Node *node);
 static void emit_literal(Node *node);
 static void emit_binary(Node *node);
+static void emit_if(Node *node);
 
 static char *get_resigter_size();
 static void emitf(int line, char *fmt, ...);
+
+static char *make_lavel();
+
+static void emit_je(char *label);
+static void emit_label(char *label);
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -32,9 +38,14 @@ void gen_toplevel(Vector *toplevel) {
     int i = 0;
     for(node = (Node *)vec_get(toplevel, i++); node != NULL;
         node = (Node *)vec_get(toplevel, i++)) {
-        if(node->kind == AST_GLOBAL_DECL) {
+        switch(node->kind) {
+        case AST_GLOBAL_DECL:
             emit_global_decl(node);
-        } else if(node->kind == AST_END) {
+            break;
+        case AST_IF:
+            emit_if(node);
+            break;
+        case AST_END:
             return;
         }
     }
@@ -111,6 +122,23 @@ static void emit_binary(Node *node) {
     }
 }
 
+static void emit_if(Node *node) {
+    emit_expr(node->cond);
+    char *label = make_lavel();
+    emit_je(label);
+    if(node->then)
+        emit_expr(node->then);
+
+    emit_label(label);
+}
+
+static void emit_je(char *label) {
+    emit("test #rax, #rax");
+    emit("je %s", label);
+}
+
+static void emit_label(char *label) { emit("%s:", label); }
+
 static void emit_gsave(char *varname) {
     char *reg = get_resigter_size();
     char *addr = format("%s(%%rip)", varname);
@@ -121,3 +149,8 @@ static char *get_resigter_size() { return "rax"; }
 
 static void push(char *reg) { emit("push #%s", reg); }
 static void pop(char *reg) { emit("pop #%s", reg); }
+
+static char *make_lavel() {
+    static int c = 0;
+    return format(".L%d", c++);
+}
