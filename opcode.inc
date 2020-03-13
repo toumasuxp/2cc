@@ -1,0 +1,5 @@
+op('(', T_LPAREN)
+op(')', T_RPAREN)
+op('{', T_LBRACE)
+op('}', T_RBRACE)
+op(';', T_SEMICOLON)

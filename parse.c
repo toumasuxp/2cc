@@ -24,6 +24,7 @@ void parse_toplevel() {
         case T_IDENT:
             make_ident_node(token);
             continue;
+
         case T_NEWLINE:
             continue;
         case T_EOF:

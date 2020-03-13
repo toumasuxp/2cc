@@ -13,7 +13,22 @@ typedef struct _Token Token;
 
 typedef struct _File File;
 
-enum { T_NUM, T_ADD, T_SUB, T_MUL, T_DIV, T_NEWLINE, T_IDENT, T_ASSIGN, T_EOF };
+enum {
+    T_NUM,
+    T_ADD,
+    T_SUB,
+    T_MUL,
+    T_DIV,
+    T_NEWLINE,
+    T_IDENT,
+    T_ASSIGN,
+    T_LPAREN,
+    T_RPAREN,
+    T_LBRACE,
+    T_RBRACE,
+    T_SEMICOLON,
+    T_EOF
+};
 
 enum {
     AST_GLOBAL_DECL,
