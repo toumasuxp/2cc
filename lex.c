@@ -13,11 +13,12 @@ struct KeyWord {
 };
 
 static struct KeyWord keywords[] = {
-    {T_IF, "if", false},
+    {T_IF, "if", false},       {T_WHILE, "while", false},
+    {T_BREAK, "break", false}, {T_CONTINUE, "continue", false},
 
-    {T_INT, "int", true},     {T_CHAR, "char", true},
-    {T_FLOAT, "float", true}, {T_DOUBLE, "double", true},
-    {T_LONG, "long", true},   {T_SHORT, "short", true},
+    {T_INT, "int", true},      {T_CHAR, "char", true},
+    {T_FLOAT, "float", true},  {T_DOUBLE, "double", true},
+    {T_LONG, "long", true},    {T_SHORT, "short", true},
 
     {T_DUMMY, "dummy", false}};
 

@@ -10,12 +10,15 @@ static void emit_expr(Node *node);
 static void emit_literal(Node *node);
 static void emit_binary(Node *node);
 static void emit_if(Node *node);
+static void emit_while(Node *node);
+static void emit_continue(Node *node);
+static void emit_break(Node *node);
+static void emit_component(Node *node);
 
 static char *get_resigter_size();
 static void emitf(int line, char *fmt, ...);
 
-static char *make_label();
-
+static void emit_jmp(char *label);
 static void emit_je(char *label);
 static void emit_label(char *label);
 static void emit_cmp(char *inst, Node *node);
@@ -51,6 +54,9 @@ void gen_toplevel(Vector *toplevel) {
             break;
         case AST_IF:
             emit_if(node);
+            break;
+        case AST_WHILE:
+            emit_while(node);
             break;
         case AST_END:
             return;
@@ -141,11 +147,30 @@ static void emit_expr(Node *node) {
     case AST_LITERAL:
         emit_literal(node);
         break;
-
+    case AST_GLOBAL_DECL:
+        emit_global_decl(node);
+        break;
+    case AST_COMPONENT:
+        emit_component(node);
+        break;
+    case AST_BREAK:
+        emit_break(node);
+        break;
+    case AST_CONTINUE:
+        emit_continue(node);
+        break;
     default:
         emit_binary(node);
         break;
     }
+}
+
+static void emit_component(Node *node) {
+    Vector *stmt = node->stmt;
+
+    int i;
+    for(i = 0; i < vec_len(stmt); i++)
+        emit_expr(vec_get(stmt, i));
 }
 
 static void ensure_gvar_init(Node *node) { emit_expr(node); }
@@ -253,10 +278,25 @@ static void emit_if(Node *node) {
     emit_label(label);
 }
 
+static void emit_while(Node *node) {
+    emit_label(node->lbegin);
+    emit_expr(node->cond);
+    emit_je(node->lend);
+    emit_expr(node->then);
+    emit_jmp(node->lbegin);
+    emit_label(node->lend);
+}
+
+static void emit_break(Node *node) { emit_jmp(node->jmp_label); }
+
+static void emit_continue(Node *node) { emit_jmp(node->jmp_label); }
+
 static void emit_je(char *label) {
     emit("test #rax, #rax");
     emit("je %s", label);
 }
+
+static void emit_jmp(char *label) { emit("jmp %s", label); }
 
 static void emit_label(char *label) { emit("%s:", label); }
 
@@ -271,7 +311,7 @@ static char *get_resigter_size() { return "rax"; }
 static void push(char *reg) { emit("push #%s", reg); }
 static void pop(char *reg) { emit("pop #%s", reg); }
 
-static char *make_label() {
+char *make_label() {
     static int c = 0;
     return format(".L%d", c++);
 }

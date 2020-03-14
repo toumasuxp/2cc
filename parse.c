@@ -5,6 +5,19 @@ static Vector *top_levels;
 
 static Map *global_var;
 
+static char *lcontinue = NULL;
+static char *lbreak = NULL;
+
+#define SET_JUMP_LABELS(cont, brk)                                             \
+    char *ocontinue = lcontinue;                                               \
+    char *obreak = lbreak;                                                     \
+    lcontinue = cont;                                                          \
+    lbreak = brk
+
+#define RESTORE_JUMP_LABELS()                                                  \
+    lcontinue = ocontinue;                                                     \
+    lbreak = obreak
+
 static Node *make_ident_node(Token *ident_token);
 static Node *make_assign_node(Token *ident_token);
 static Node *make_literal_node();
@@ -13,6 +26,9 @@ static Node *make_add_sub_node();
 static Node *make_binary_node(int kind, Node *left, Node *right);
 static Node *make_if_node();
 static Node *make_cond_node();
+static Node *make_while_node();
+static Node *make_continue_node();
+static Node *make_break_node();
 static Node *make_newline_node();
 static Node *make_eof_node();
 static Node *read_stmt();
@@ -165,6 +181,32 @@ static Node *make_if_node() {
     return node;
 }
 
+static Node *make_while_node() {
+    ensure_token(T_LPAREN);
+    Node *cond = make_cond_node();
+    ensure_token(T_RPAREN);
+
+    char *begin = make_label();
+    char *end = make_label();
+
+    SET_JUMP_LABELS(begin, end);
+    Node *then;
+    if(expect_token(T_LBRACE)) {
+        then = make_component_node();
+    } else {
+        then = read_stmt();
+    }
+    RESTORE_JUMP_LABELS();
+
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_WHILE;
+    node->cond = cond;
+    node->then = then;
+    node->lbegin = begin;
+    node->lend = end;
+    return node;
+}
+
 static Node *read_stmt() {
     Token *token = lex();
     switch(get_token_kind(token)) {
@@ -172,6 +214,12 @@ static Node *read_stmt() {
         return make_component_node();
     case T_IF:
         return make_if_node();
+    case T_WHILE:
+        return make_while_node();
+    case T_BREAK:
+        return make_break_node();
+    case T_CONTINUE:
+        return make_continue_node();
     case T_EOF:
         return make_eof_node();
     default:
@@ -208,11 +256,34 @@ static Node *read_decl_or_stmt() {
         return read_stmt();
 }
 
+static Node *make_break_node() {
+    if(lbreak == NULL) {
+        printf("ERROR: unvalid break parser\n");
+        exit(1);
+    }
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_BREAK;
+    node->jmp_label = lbreak;
+    return node;
+}
+
+static Node *make_continue_node() {
+    if(lbreak == NULL) {
+        printf("ERROR: unvalid continue parser\n");
+        exit(1);
+    }
+
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_CONTINUE;
+    node->jmp_label = lcontinue;
+    return node;
+}
+
 static Node *make_component_node() {
     Vector *component = vec_init();
 
     while(!expect_token(T_RBRACE)) {
-        vec_push(component, read_stmt());
+        vec_push(component, read_decl_or_stmt());
     }
 
     Node *node = (Node *)malloc(sizeof(Node));

@@ -21,6 +21,9 @@ enum {
     T_DIV,
     T_NEWLINE,
     T_IF,
+    T_WHILE,
+    T_BREAK,
+    T_CONTINUE,
     T_IDENT,
     T_ASSIGN,
     T_EQUAL,
@@ -65,6 +68,9 @@ enum {
     AST_LITERAL,
     AST_COMPONENT,
     AST_IF,
+    AST_WHILE,
+    AST_BREAK,
+    AST_CONTINUE,
     AST_NEWLINE,
     AST_EOF,
     AST_END,
@@ -106,11 +112,16 @@ struct _Node {
             struct _Node *right;
         };
 
-        // if statement
+        // if or while statement
         struct {
             struct _Node *cond;
             struct _Node *then;
+            char *lbegin;
+            char *lend;
         };
+
+        // break or continue
+        char *jmp_label;
 
         // statement
         Vector *stmt;
@@ -177,6 +188,7 @@ char *vformat(char *fmt, va_list ap);
 
 void gen_init();
 void gen_toplevel(Vector *toplevel);
+char *make_label();
 
 // map.c
 
