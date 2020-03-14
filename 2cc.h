@@ -23,12 +23,20 @@ enum {
     T_IF,
     T_IDENT,
     T_ASSIGN,
+    T_EQUAL,
+    T_LESS_EQ,
+    T_LESS,
+    T_GRE_EQ,
+    T_GRE,
+    T_BIN_AND,
+    T_BIN_OR,
     T_LPAREN,
     T_RPAREN,
     T_LBRACE,
     T_RBRACE,
     T_SEMICOLON,
-    T_EOF
+    T_EOF,
+    T_DUMMY
 };
 
 enum {
@@ -37,6 +45,13 @@ enum {
     AST_SUB,
     AST_MUL,
     AST_DIV,
+    AST_LOG_OR,
+    AST_LOG_AND,
+    AST_EQUAL,
+    AST_LESS_EQ,
+    AST_LESS,
+    AST_GRE_EQ,
+    AST_GRE,
     AST_LITERAL,
     AST_COMPONENT,
     AST_IF,
@@ -87,6 +102,7 @@ struct _Node {
 
 void file_init(char *filename);
 int readc();
+bool expectc(int c);
 void unreadc(int c);
 void skip_space();
 

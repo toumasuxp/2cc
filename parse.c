@@ -92,18 +92,60 @@ static Node *make_add_sub_node() {
     return node;
 }
 
+static Node *make_relational_node() {
+    Node *node = make_add_sub_node();
+
+    if(next_token(T_LESS_EQ))
+        return make_binary_node(AST_LESS_EQ, node, make_add_sub_node());
+    else if(next_token(T_LESS))
+        return make_binary_node(AST_LESS, node, make_add_sub_node());
+    else if(next_token(T_GRE_EQ))
+        return make_binary_node(AST_GRE_EQ, node, make_add_sub_node());
+    else if(next_token(T_GRE))
+        return make_binary_node(AST_GRE, node, make_add_sub_node());
+
+    return node;
+}
+
+static Node *make_equ_neq_node() {
+    Node *node = make_relational_node();
+
+    if(next_token(T_EQUAL))
+        return make_binary_node(AST_EQUAL, node, make_relational_node());
+
+    return node;
+}
+
+static Node *make_logand_node() {
+    Node *node = make_equ_neq_node();
+
+    if(next_token(T_BIN_AND))
+        return make_binary_node(AST_LOG_AND, node, make_equ_neq_node());
+
+    return node;
+}
+
+static Node *make_logor_node() {
+    Node *node = make_logand_node();
+
+    if(next_token(T_BIN_OR))
+        return make_binary_node(AST_LOG_OR, node, make_logand_node());
+
+    return node;
+}
+
 static Node *make_assign_node(Token *ident_token) {
-    Node *value = make_add_sub_node();
+    Node *value = make_logor_node();
 
     Node *self = (Node *)malloc(sizeof(Node));
     self->kind = AST_GLOBAL_DECL;
-    self->varname = get_token_num(ident_token);
+    self->varname = get_token_val(ident_token);
     self->value = value;
 
     return self;
 }
 
-static Node *make_cond_node() { return make_add_sub_node(); }
+static Node *make_cond_node() { return make_logor_node(); }
 
 static Node *make_if_node() {
     ensure_token(T_LPAREN);
@@ -131,8 +173,6 @@ static Node *read_stmt() {
         return make_component_node();
     case T_IF:
         return make_if_node();
-    case T_NEWLINE:
-        return make_newline_node();
     case T_EOF:
         return make_eof_node();
     default:

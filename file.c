@@ -52,6 +52,15 @@ int readc() {
     return c;
 }
 
+bool expectc(int c) {
+    char next = readc();
+    if(next == c)
+        return true;
+
+    unreadc(next);
+    return false;
+}
+
 void unreadc(int c) {
     if(c == EOF)
         return;

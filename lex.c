@@ -10,7 +10,10 @@ struct KeyWord {
     char *ident;
 };
 
-static struct KeyWord keywords[] = {{T_IF, "if"}};
+static struct KeyWord keywords[] = {
+    {T_IF, "if"},
+    {T_DUMMY, "dummy"},
+};
 
 static Vector *token_buf = NULL;
 
@@ -25,8 +28,14 @@ static Token *read_mult();
 static Token *read_div();
 static Token *make_ident_token(char *buf);
 
-static Token *read_equal(int c);
+static Token *read_equal();
 static Token *make_equal_token();
+static Token *make_assign_token();
+static Token *read_lbracket();
+static Token *read_rbracket();
+static Token *read_and();
+static Token *read_or();
+static Token *make_kind_token(int kind);
 static Token *make_op_token(int kind);
 static Token *make_keyword_token(char *buf);
 
@@ -46,35 +55,47 @@ Token *lex() {
     Vector *vec = vec_tail(token_buf);
     if(vec_len(vec) > 0)
         return vec_pop(vec);
-    skip_space();
 
-    int c = readc();
-
-    switch(c) {
-    case '0' ... '9':
-        return read_number(c);
-    case 'a' ... 'z':
-    case 'A' ... 'Z':
-    case '_':
-        return read_ident(c);
-    case '=':
-        return read_equal(c);
-    case '+':
-        return read_plus();
-    case '*':
-        return read_mult();
-    case '/':
-        return read_div();
+    int c;
+    while(1) {
+        skip_space();
+        c = readc();
+        switch(c) {
+        case '0' ... '9':
+            return read_number(c);
+        case 'a' ... 'z':
+        case 'A' ... 'Z':
+        case '_':
+            return read_ident(c);
+        case '=':
+            return read_equal();
+        case '+':
+            return read_plus();
+        case '*':
+            return read_mult();
+        case '/':
+            return read_div();
+        case '<':
+            return read_lbracket();
+        case '>':
+            return read_rbracket();
+        case '&':
+            return read_and();
+        case '|':
+            return read_or();
 #define op(c, t)                                                               \
     case c:                                                                    \
         return make_op_token(t);
 #include "opcode.inc"
-    case '\n':
-        return make_newline_token();
-    case EOF:
-        return make_eof_token();
-    default:
-        return make_eof_token();
+#undef op
+        case '\n':
+            continue;
+        case EOF:
+            return make_eof_token();
+        default:
+            printf("error log\n");
+            exit(1);
+        }
     }
 }
 
@@ -104,7 +125,7 @@ void ensure_token(int kind) {
     if(get_token_kind(token) == kind) {
         return;
     } else {
-        printf("ERROR: invalid token %s", get_token_val(token));
+        printf("ERROR: invalid token %d\n", get_token_kind(token));
         exit(1);
     }
 }
@@ -155,9 +176,21 @@ static Token *read_ident(int c) {
     }
 }
 
-static Token *read_equal(int c) { return make_equal_token(c); }
+static Token *read_equal() {
+    if(expectc('='))
+        return make_equal_token();
+
+    return make_assign_token();
+}
 
 static Token *make_equal_token() {
+    Token *tok = (Token *)malloc(sizeof(Token));
+    tok->kind = T_EQUAL;
+    tok->val = NULL;
+    return tok;
+}
+
+static Token *make_assign_token() {
     Token *tok = (Token *)malloc(sizeof(Token));
     tok->kind = T_ASSIGN;
     tok->val = NULL;
@@ -209,6 +242,36 @@ static Token *read_div() {
     return tok;
 }
 
+static Token *read_lbracket() {
+    if(expectc('='))
+        return make_kind_token(T_LESS_EQ);
+
+    return make_kind_token(T_LESS);
+}
+
+static Token *read_rbracket() {
+    if(expectc('='))
+        return make_kind_token(T_GRE_EQ);
+
+    return make_kind_token(T_GRE);
+}
+
+static Token *read_and() {
+    if(expectc('&'))
+        return make_kind_token(T_BIN_AND);
+}
+
+static Token *read_or() {
+    if(expectc('|'))
+        return make_kind_token(T_BIN_OR);
+}
+
+static Token *make_kind_token(int kind) {
+    Token *tok = (Token *)malloc(sizeof(Token));
+    tok->kind = kind;
+    return tok;
+}
+
 static Token *make_eof_token() {
     Token *tok = (Token *)malloc(sizeof(Token));
     tok->kind = T_EOF;
@@ -222,9 +285,9 @@ static Token *make_op_token(int kind) {
 }
 
 static bool is_keyword(char *buf) {
-    struct KeyWord *key;
-    for(key = keywords; key != NULL; key++) {
-        if(!strcmp(buf, key->ident)) {
+    int i;
+    for(i = 0; keywords[i].kind != T_DUMMY; i++) {
+        if(!strcmp(buf, keywords[i].ident)) {
             return true;
         }
     }
@@ -232,11 +295,11 @@ static bool is_keyword(char *buf) {
 }
 
 static Token *make_keyword_token(char *buf) {
-    struct KeyWord *key;
-    for(key = keywords; key != NULL; key++) {
-        if(!strcmp(buf, key->ident)) {
+    int i;
+    for(i = 0; keywords[i].kind != T_DUMMY; i++) {
+        if(!strcmp(buf, keywords[i].ident)) {
             Token *token = (Token *)malloc(sizeof(Token));
-            token->kind = key->kind;
+            token->kind = keywords[i].kind;
             return token;
         }
     }

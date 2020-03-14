@@ -14,10 +14,14 @@ static void emit_if(Node *node);
 static char *get_resigter_size();
 static void emitf(int line, char *fmt, ...);
 
-static char *make_lavel();
+static char *make_label();
 
 static void emit_je(char *label);
 static void emit_label(char *label);
+static void emit_cmp(char *inst, Node *node);
+static void emit_arithmetic(char *inst, Node *node);
+static void emit_log_and(Node *node);
+static void emit_log_or(Node *node);
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -97,17 +101,42 @@ static void ensure_gvar_init(Node *node) { emit_expr(node); }
 static void emit_binary(Node *node) {
     char *op = NULL;
     switch(node->kind) {
+    case AST_EQUAL:
+        emit_cmp("sete", node);
+        return;
+    case AST_LESS_EQ:
+        emit_cmp("setle", node);
+        return;
+    case AST_LESS:
+        emit_cmp("setl", node);
+        return;
+    case AST_LOG_AND:
+        emit_log_and(node);
+        return;
+    case AST_LOG_OR:
+        emit_log_or(node);
+        return;
+    case AST_GRE_EQ:
+        emit_cmp("setge", node);
+        return;
+    case AST_GRE:
+        emit_cmp("setg", node);
+        return;
     case AST_ADD:
-        op = "add";
-        break;
+        emit_arithmetic("add", node);
+        return;
     case AST_SUB:
-        op = "sub";
-        break;
+        emit_arithmetic("sub", node);
+        return;
     case AST_MUL:
-        op = "imul";
-        break;
+        emit_arithmetic("imul", node);
+        return;
+    case AST_DIV:
+        emit_arithmetic("div", node);
     }
+}
 
+static void emit_arithmetic(char *inst, Node *node) {
     emit_expr(node->left);
     push("rax");
     emit_expr(node->right);
@@ -118,16 +147,56 @@ static void emit_binary(Node *node) {
         emit("xor #edx, #edx");
         emit("div #rcx");
     } else {
-        emit("%s #rcx, #rax", op);
+        emit("%s #rcx, #rax", inst);
     }
+}
+
+static void emit_log_and(Node *node) {
+    char *end = make_label();
+    emit_expr(node->left);
+    emit("test #rax, #rax");
+    emit("mov $0, #rax");
+    emit("je %s", end);
+    emit_expr(node->right);
+    emit("test #rax, #rax");
+    emit("mov $0, #rax");
+    emit("je %s", end);
+    emit("mov $1, #rax");
+    emit_label(end);
+}
+
+static void emit_log_or(Node *node) {
+    char *end = make_label();
+    emit_expr(node->left);
+    emit("test #rax, #rax");
+    emit("mov $1, #rax");
+    emit("je %s", end);
+    emit_expr(node->right);
+    emit("test #rax, #rax");
+    emit("mov $1, #rax");
+    emit("je %s", end);
+    emit("mov $0, #rax");
+    emit_label(end);
+}
+
+static void emit_cmp(char *inst, Node *node) {
+    emit_expr(node->left);
+    push("rax");
+    emit_expr(node->right);
+    pop("rcx");
+    emit("cmp #eax, #ecx");
+    emit("%s #al", inst);
+    emit("movzb #al, #eax");
 }
 
 static void emit_if(Node *node) {
     emit_expr(node->cond);
-    char *label = make_lavel();
+    char *label = make_label();
     emit_je(label);
-    if(node->then)
+    if(node->then) {
+        printf("FILE %s, LINE %d\n", __FILE__, __LINE__);
         emit_expr(node->then);
+    }
 
     emit_label(label);
 }
@@ -150,7 +219,7 @@ static char *get_resigter_size() { return "rax"; }
 static void push(char *reg) { emit("push #%s", reg); }
 static void pop(char *reg) { emit("pop #%s", reg); }
 
-static char *make_lavel() {
+static char *make_label() {
     static int c = 0;
     return format(".L%d", c++);
 }

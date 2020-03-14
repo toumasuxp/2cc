@@ -5,7 +5,6 @@ int main() {
     parse_init();
     gen_init();
     file_init("sample.dd");
-
     parse_toplevel();
     Vector *tops = get_top_levels();
     gen_toplevel(tops);
