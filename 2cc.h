@@ -14,7 +14,7 @@ typedef struct _Token Token;
 typedef struct _File File;
 
 enum {
-    T_NUM,
+    T_LITERAL,
     T_ADD,
     T_SUB,
     T_MUL,
@@ -30,6 +30,14 @@ enum {
     T_GRE,
     T_BIN_AND,
     T_BIN_OR,
+
+    T_INT,
+    T_CHAR,
+    T_SHORT,
+    T_LONG,
+    T_FLOAT,
+    T_DOUBLE,
+
     T_LPAREN,
     T_RPAREN,
     T_LBRACE,
@@ -38,6 +46,8 @@ enum {
     T_EOF,
     T_DUMMY
 };
+
+enum { TYPE_INT, TYPE_SHORT, TYPE_LONG, TYPE_CHAR, TYPE_FLOAT, TYPE_DOUBLE };
 
 enum {
     AST_GLOBAL_DECL,
@@ -66,6 +76,8 @@ typedef struct _Vector Vector;
 
 typedef struct _Node Node;
 
+typedef struct _Type Type;
+
 struct _Node {
     int kind;
     union {
@@ -76,8 +88,15 @@ struct _Node {
             struct _Node *value;
         };
 
+        // variable declare
+        struct {
+            Type *type;
+            char *ident;
+            struct _Node *val;
+        };
+
         // literal
-        char *val;
+        int int_val;
 
         // binary calc ex) + - %
         struct {
@@ -94,6 +113,11 @@ struct _Node {
         // statement
         Vector *stmt;
     };
+};
+
+struct _Type {
+    int kind;
+    int size;
 };
 
 // main.c
@@ -118,6 +142,7 @@ Token *peek_token();
 bool expect_token(int kind);
 void ensure_token(int kind);
 char *get_token_val(Token *token);
+bool is_type(Token *token);
 
 // parse.c
 

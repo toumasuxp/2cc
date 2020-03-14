@@ -3,23 +3,29 @@
 struct _Token {
     int kind;
     char *val;
+    bool is_type;
 };
 
 struct KeyWord {
     int kind;
     char *ident;
+    bool is_type;
 };
 
 static struct KeyWord keywords[] = {
-    {T_IF, "if"},
-    {T_DUMMY, "dummy"},
-};
+    {T_IF, "if", false},
+
+    {T_INT, "int", true},     {T_CHAR, "char", true},
+    {T_FLOAT, "float", true}, {T_DOUBLE, "double", true},
+    {T_LONG, "long", true},   {T_SHORT, "short", true},
+
+    {T_DUMMY, "dummy", false}};
 
 static Vector *token_buf = NULL;
 
 static Token *read_number(int c);
 static Token *read_ident(int c);
-static Token *make_num_token(char *num);
+static Token *make_literal_token(char *num);
 static Token *make_newline_token();
 static Token *make_eof_token();
 static Token *read_plus();
@@ -143,14 +149,13 @@ char *get_token_num(Token *token) { return token->val; }
 static Token *read_number(int c) {
     Buffer *buf = make_buffer();
     buf_write(buf, c);
-
     for(;;) {
         c = readc();
 
         if(!isdigit(c) && c != '.') {
             unreadc(c);
             buf_write(buf, '\0');
-            return make_num_token(buf_get_body(buf));
+            return make_literal_token(buf_get_body(buf));
         }
         buf_write(buf, c);
     }
@@ -197,10 +202,11 @@ static Token *make_assign_token() {
     return tok;
 }
 
-static Token *make_num_token(char *num) {
+static Token *make_literal_token(char *num) {
     Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_NUM;
+    tok->kind = T_LITERAL;
     tok->val = num;
+    tok->is_type = false;
     return tok;
 }
 
@@ -294,12 +300,24 @@ static bool is_keyword(char *buf) {
     return false;
 }
 
+bool is_type(Token *token) {
+    int i;
+    int kind = get_token_kind(token);
+    for(i = 0; keywords[i].kind != T_DUMMY; i++) {
+        if(kind == keywords[i].kind && keywords[i].is_type) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static Token *make_keyword_token(char *buf) {
     int i;
     for(i = 0; keywords[i].kind != T_DUMMY; i++) {
         if(!strcmp(buf, keywords[i].ident)) {
             Token *token = (Token *)malloc(sizeof(Token));
             token->kind = keywords[i].kind;
+            token->is_type = keywords[i].is_type;
             return token;
         }
     }

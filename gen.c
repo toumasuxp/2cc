@@ -23,6 +23,9 @@ static void emit_arithmetic(char *inst, Node *node);
 static void emit_log_and(Node *node);
 static void emit_log_or(Node *node);
 
+static void emit_data_primitive(Node *node);
+static int eval_intval(Node *node);
+
 static void push(char *reg);
 static void pop(char *reg);
 
@@ -78,11 +81,60 @@ static void emitf(int line, char *fmt, ...) {
 }
 
 static void emit_global_decl(Node *node) {
-    ensure_gvar_init(node->value);
-    emit_gsave(node->varname);
+    emit(".data");
+    emit_label(node->ident);
+    emit_data_primitive(node);
 }
 
-static void emit_literal(Node *node) { emit("mov $%s, #rax", node->val); }
+static void emit_data_primitive(Node *node) {
+    switch(node->type->size) {
+    case 1:
+        emit(".byte %d", eval_intval(node->val));
+        break;
+    case 2:
+        emit(".word %d", eval_intval(node->val));
+        break;
+    case 4:
+        emit(".int %d", eval_intval(node->val));
+        break;
+    }
+}
+
+static int eval_intval(Node *node) {
+    switch(node->kind) {
+    case AST_LITERAL:
+        return node->int_val;
+#define L eval_intval(node->left)
+#define R eval_intval(node->right)
+    case AST_ADD:
+        return L + R;
+    case AST_SUB:
+        return L - R;
+    case AST_MUL:
+        return L * R;
+    case AST_DIV:
+        return L / R;
+    case AST_LESS_EQ:
+        return L <= R;
+    case AST_LESS:
+        return L < R;
+    case AST_GRE:
+        return L > R;
+    case AST_GRE_EQ:
+        return L >= R;
+    case AST_LOG_AND:
+        return L && R;
+    case AST_LOG_OR:
+        return L || R;
+#undef L
+#undef R
+    default:
+        printf("ERROR!! eval_intval\n");
+        exit(1);
+    }
+}
+
+static void emit_literal(Node *node) { emit("mov $%d, #rax", node->int_val); }
 
 static void emit_expr(Node *node) {
     switch(node->kind) {

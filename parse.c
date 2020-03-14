@@ -14,7 +14,15 @@ static Node *make_cond_node();
 static Node *make_newline_node();
 static Node *make_eof_node();
 static Node *read_stmt();
+static Node *read_decl();
+static Node *read_decl_or_stmt();
 static Node *make_component_node();
+
+static Type *make_decl_type(Token *token);
+static Type *make_primitive_type(int kind, int size);
+
+static Node *make_decl_and_init_node(Type *type, char *ident, Node *value);
+static Node *make_decl_node(Type *type, char *ident);
 
 void parse_init() {
     top_levels = vec_init();
@@ -24,24 +32,11 @@ void parse_init() {
 void parse_toplevel() {
     Token *token;
     while(1) {
-        token = lex();
-        switch(get_token_kind(token)) {
-        case T_IDENT:
-            vec_push(node_vec, make_ident_node(token));
-            continue;
-        case T_IF:
-            vec_push(node_vec, make_if_node());
-            continue;
-        case T_NEWLINE:
-            vec_push(node_vec, make_newline_node());
-            continue;
-        case T_EOF:
-            vec_push(node_vec, make_eof_node());
+        token = peek_token();
+        if(get_token_kind(token) == T_EOF)
             return;
-        default:
-            printf("parrser error\n");
-            exit(1);
-        }
+
+        vec_push(node_vec, read_decl_or_stmt());
     }
 }
 
@@ -66,7 +61,8 @@ static Node *make_literal_node() {
 
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_LITERAL;
-    node->val = get_token_val(token);
+    char *val = get_token_val(token);
+    node->int_val = atoi(val);
     return node;
 }
 
@@ -180,6 +176,34 @@ static Node *read_stmt() {
     }
 }
 
+static Node *read_decl() {
+    Token *type = lex();
+    Type *basetype = make_decl_type(type);
+    Token *ident_token = lex();
+    char *ident = get_token_val(ident_token);
+    if(get_token_kind(ident_token) != T_IDENT) {
+        printf("unvalid token : should be ident token\n");
+        exit(1);
+    }
+    Node *node;
+    if(next_token(T_ASSIGN)) {
+        Node *value = make_logor_node();
+        node = make_decl_and_init_node(basetype, ident, value);
+    } else {
+        node = make_decl_and_init_node(basetype, ident, NULL);
+    }
+    ensure_token(T_SEMICOLON);
+    return node;
+}
+
+static Node *read_decl_or_stmt() {
+    Token *tok = peek_token();
+    if(is_type(tok)) {
+        return read_decl();
+    } else
+        return read_stmt();
+}
+
 static Node *make_component_node() {
     Vector *component = vec_init();
 
@@ -206,3 +230,50 @@ static Node *make_eof_node() {
 }
 
 Vector *get_top_levels() { return node_vec; }
+
+static Type *make_decl_type(Token *token) {
+    switch(get_token_kind(token)) {
+    case T_INT:
+        return make_primitive_type(TYPE_INT, 4);
+    case T_SHORT:
+        return make_primitive_type(TYPE_SHORT, 2);
+    case T_DOUBLE:
+        return make_primitive_type(TYPE_DOUBLE, 4);
+    case T_FLOAT:
+        return make_primitive_type(TYPE_FLOAT, 4);
+    case T_LONG:
+        return make_primitive_type(TYPE_LONG, 4);
+    case T_CHAR:
+        return make_primitive_type(TYPE_CHAR, 4);
+    default:
+        printf("unvalid type token\n");
+        exit(1);
+    }
+}
+
+static Type *make_primitive_type(int kind, int size) {
+    Type *type = (Type *)malloc(sizeof(Type));
+    type->kind = kind;
+    type->size = size;
+    return type;
+}
+
+static Node *make_decl_and_init_node(Type *type, char *ident, Node *value) {
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_GLOBAL_DECL;
+    node->type = type;
+    node->ident = ident;
+    node->val = value;
+
+    return node;
+}
+
+static Node *make_decl_node(Type *type, char *ident) {
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_GLOBAL_DECL;
+    node->type = type;
+    node->ident = ident;
+    node->val = NULL;
+
+    return node;
+}

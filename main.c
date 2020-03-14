@@ -9,5 +9,6 @@ int main() {
     Vector *tops = get_top_levels();
     gen_toplevel(tops);
 
+    printf("compile complete!!\n");
     return 1;
 }
