@@ -78,6 +78,8 @@ typedef struct _Node Node;
 
 typedef struct _Type Type;
 
+typedef struct _Map Map;
+
 struct _Node {
     int kind;
     union {
@@ -175,3 +177,9 @@ char *vformat(char *fmt, va_list ap);
 
 void gen_init();
 void gen_toplevel(Vector *toplevel);
+
+// map.c
+
+Map *map_init();
+void *map_get(Map *map, char *key);
+void map_set(Map *map, char *key, void *val);

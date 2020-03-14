@@ -3,6 +3,8 @@
 static Vector *node_vec;
 static Vector *top_levels;
 
+static Map *global_var;
+
 static Node *make_ident_node(Token *ident_token);
 static Node *make_assign_node(Token *ident_token);
 static Node *make_literal_node();
@@ -27,6 +29,7 @@ static Node *make_decl_node(Type *type, char *ident);
 void parse_init() {
     top_levels = vec_init();
     node_vec = vec_init();
+    global_var = map_init();
 }
 
 void parse_toplevel() {
@@ -193,6 +196,7 @@ static Node *read_decl() {
         node = make_decl_and_init_node(basetype, ident, NULL);
     }
     ensure_token(T_SEMICOLON);
+    map_set(global_var, ident, node);
     return node;
 }
 

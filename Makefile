@@ -10,7 +10,8 @@ ALL_REQUEST= main.c   \
 		 lex.c    \
 		 vector.c \
 		 buffer.c \
-		 gen.c
+		 gen.c \
+		 map.c
 
 
 $(TARGET): $(ALL_REQUEST)
