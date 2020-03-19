@@ -18,12 +18,14 @@ static char *lbreak = NULL;
     lcontinue = ocontinue;                                                     \
     lbreak = obreak
 
-static Node *make_ident_node(Token *ident_token);
-static Node *make_assign_node(Token *ident_token);
+static Node *make_ident_node();
+static Node *make_assign_node();
 static Node *make_literal_node();
 static Node *make_mul_sub_node();
 static Node *make_add_sub_node();
 static Node *make_binary_node(int kind, Node *left, Node *right);
+static Node *make_actual_assign_node(Node *node, int ast_kind);
+static void *ensure_assign_node(Node *node);
 static Node *make_if_node();
 static Node *make_cond_node();
 static Node *make_while_node();
@@ -59,12 +61,9 @@ void parse_toplevel() {
     }
 }
 
-static Node *make_ident_node(Token *ident_token) {
-    Node *node;
-    if(next_token(T_ASSIGN)) {
-        return make_assign_node(ident_token);
-    }
-    return NULL;
+static Node *make_ident_node() {
+    Node *node = make_assign_node();
+    return node;
 }
 
 static Node *make_binary_node(int kind, Node *left, Node *right) {
@@ -149,18 +148,40 @@ static Node *make_logor_node() {
     return node;
 }
 
-static Node *make_assign_node(Token *ident_token) {
-    Node *value = make_logor_node();
+static Node *make_assign_node() {
+    Node *node = make_logor_node();
 
-    Node *self = (Node *)malloc(sizeof(Node));
-    self->kind = AST_GLOBAL_DECL;
-    self->varname = get_token_val(ident_token);
-    self->value = value;
+    if(next_token(T_ASSIGN))
+        return make_actual_assign_node(node, AST_SIMPLE_ASSIGN);
 
-    return self;
+    if(next_token(T_ADD_ASSIGN))
+        return make_actual_assign_node(node, AST_ADD_ASSIGN);
+
+    if(next_token(T_SUB_ASSIGN))
+        return make_actual_assign_node(node, AST_SUB_ASSIGN);
+
+    if(next_token(T_MUL_ASSIGN))
+        return make_actual_assign_node(node, AST_MUL_ASSIGN);
+
+    if(next_token(T_DIV_ASSIGN))
+        return make_actual_assign_node(node, AST_DIV_ASSIGN);
+
+    return node;
 }
 
-static Node *make_cond_node() { return make_logor_node(); }
+static Node *make_actual_assign_node(Node *node, int ast_kind) {
+    ensure_assign_node(node);
+    return make_binary_node(ast_kind, node, make_logor_node());
+}
+
+static void *ensure_assign_node(Node *node) {
+    if(node->kind != AST_GVAR && node->kind != AST_LVAR) {
+        printf("unvalid token error: should AST_GVAR or AST_LVAR\n");
+        exit(1);
+    }
+}
+
+static Node *make_cond_node() { return make_assign_node(); }
 
 static Node *make_if_node() {
     ensure_token(T_LPAREN);
@@ -168,10 +189,10 @@ static Node *make_if_node() {
     ensure_token(T_RPAREN);
 
     Node *then;
-    if(expect_token(T_LBRACE)) {
+    if(next_token(T_LBRACE)) {
         then = make_component_node();
     } else {
-        then = read_stmt();
+        then = read_decl_or_stmt();
     }
 
     Node *node = (Node *)malloc(sizeof(Node));
@@ -182,22 +203,24 @@ static Node *make_if_node() {
 }
 
 static Node *make_while_node() {
+
     ensure_token(T_LPAREN);
     Node *cond = make_cond_node();
     ensure_token(T_RPAREN);
-
     char *begin = make_label();
     char *end = make_label();
 
     SET_JUMP_LABELS(begin, end);
     Node *then;
-    if(expect_token(T_LBRACE)) {
+    printf("while then\n");
+
+    if(next_token(T_LBRACE)) {
         then = make_component_node();
     } else {
-        then = read_stmt();
+        then = read_decl_or_stmt();
     }
-    RESTORE_JUMP_LABELS();
 
+    RESTORE_JUMP_LABELS();
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_WHILE;
     node->cond = cond;
@@ -223,7 +246,8 @@ static Node *read_stmt() {
     case T_EOF:
         return make_eof_node();
     default:
-        return make_ident_node(token);
+        unread_token(token);
+        return make_ident_node();
     }
 }
 
@@ -282,9 +306,14 @@ static Node *make_continue_node() {
 static Node *make_component_node() {
     Vector *component = vec_init();
 
+    Node *self;
     while(!expect_token(T_RBRACE)) {
-        vec_push(component, read_decl_or_stmt());
+        self = read_decl_or_stmt();
+        printf("node kind is %d\n", self->kind);
+        vec_push(component, self);
     }
+
+    ensure_token(T_RBRACE);
 
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_COMPONENT;

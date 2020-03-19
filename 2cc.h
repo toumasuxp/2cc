@@ -26,6 +26,10 @@ enum {
     T_CONTINUE,
     T_IDENT,
     T_ASSIGN,
+    T_ADD_ASSIGN,
+    T_SUB_ASSIGN,
+    T_MUL_ASSIGN,
+    T_DIV_ASSIGN,
     T_EQUAL,
     T_LESS_EQ,
     T_LESS,
@@ -54,6 +58,8 @@ enum { TYPE_INT, TYPE_SHORT, TYPE_LONG, TYPE_CHAR, TYPE_FLOAT, TYPE_DOUBLE };
 
 enum {
     AST_GLOBAL_DECL,
+    AST_GVAR,
+    AST_LVAR,
     AST_ADD,
     AST_SUB,
     AST_MUL,
@@ -72,6 +78,13 @@ enum {
     AST_BREAK,
     AST_CONTINUE,
     AST_NEWLINE,
+
+    AST_SIMPLE_ASSIGN,
+    AST_ADD_ASSIGN,
+    AST_SUB_ASSIGN,
+    AST_MUL_ASSIGN,
+    AST_DIV_ASSIGN,
+
     AST_EOF,
     AST_END,
 };

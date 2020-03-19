@@ -33,6 +33,7 @@ static void push(char *reg);
 static void pop(char *reg);
 
 #define emit(...) emitf(__LINE__, "\t" __VA_ARGS__)
+#define emit_noindent(...) emitf(__LINE__, "" __VA_ARGS__)
 
 void gen_init() {
     char *output_filename = "sample.s";
@@ -298,7 +299,7 @@ static void emit_je(char *label) {
 
 static void emit_jmp(char *label) { emit("jmp %s", label); }
 
-static void emit_label(char *label) { emit("%s:", label); }
+static void emit_label(char *label) { emit_noindent("%s:", label); }
 
 static void emit_gsave(char *varname) {
     char *reg = get_resigter_size();
