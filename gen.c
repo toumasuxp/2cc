@@ -2,10 +2,14 @@
 
 static FILE *output_fp = NULL;
 
+static char *regs[] = {"rdi", "rsi", "rdx", "rcx", "r9", "r11"};
+
 static void emit_global_decl(Node *node);
 
 static void ensure_gvar_init(Node *node);
-static void emit_gsave(char *varname);
+static void emit_store(Node *node, int kind);
+static void emit_gsave(Node *var);
+static void emit_lsave(Node *var);
 static void emit_expr(Node *node);
 static void emit_literal(Node *node);
 static void emit_binary(Node *node);
@@ -35,6 +39,8 @@ static int eval_intval(Node *node);
 static void emit_funcdef(Node *func);
 static void emit_func_prologue(Node *func);
 static void emit_ret();
+
+static void push_func_params(Vector *params);
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -103,6 +109,8 @@ static void emit_func_prologue(Node *func) {
     push("rbp");
     emit("mov #rsp, #rbp");
 
+    push_func_params(func->params);
+
     int off = 0;
     int local_sizes = 0;
     for(int i = 0; i < vec_len(func->local_vars); i++) {
@@ -117,6 +125,20 @@ static void emit_func_prologue(Node *func) {
         emit("sub $%d, #rsp", local_sizes);
     }
 }
+
+static void push_func_params(Vector *params) {
+    int nreg = 0;
+    int off = 0;
+    for(int i = 0; i < vec_len(params); i++) {
+        Param *param = vec_get(params, i);
+
+        push(regs[nreg++]);
+        off -= 8;
+        param->loff = off;
+    }
+}
+
+static int get_param_len(Node *func) { return vec_len(func->params); }
 
 static void emit_ret() {
     emit("leave");
@@ -256,7 +278,31 @@ static void emit_binary(Node *node) {
 static void emit_assign(Node *node) {
     push("rax");
     emit_expr(node->right);
+    emit_store(node->left, node->kind);
     emit("mov #rax, %s(#rip)", node->left->varname);
+}
+
+static void emit_store(Node *node, int kind) {
+    switch(kind) {
+    case AST_LOCAL_DECL:
+        emit_lsave(node);
+        return;
+    case AST_GLOBAL_DECL:
+        emit_gsave(node);
+        return;
+    }
+}
+
+static void emit_gsave(Node *var) {
+    char *reg = get_resigter_size();
+    char *addr = format("%s(%%rip)", var->varname);
+    emit("mov %s, %s", reg, addr);
+}
+
+static void emit_lsave(Node *var) {
+    char *reg = get_resigter_size();
+    char *addr = format("%d(%%rbp)", var->loff);
+    emit("mov %s, %s", reg, addr);
 }
 
 static void emit_arithmetic(char *inst, Node *node) {
@@ -345,12 +391,6 @@ static void emit_je(char *label) {
 static void emit_jmp(char *label) { emit("jmp %s", label); }
 
 static void emit_label(char *label) { emit_noindent("%s:", label); }
-
-static void emit_gsave(char *varname) {
-    char *reg = get_resigter_size();
-    char *addr = format("%s(%%rip)", varname);
-    emit("mov #%s, %s", reg, addr);
-}
 
 static char *get_resigter_size() { return "rax"; }
 

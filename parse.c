@@ -9,6 +9,8 @@ static Vector *local_vars;
 static char *lcontinue = NULL;
 static char *lbreak = NULL;
 
+static bool is_global = true;
+
 #define SET_JUMP_LABELS(cont, brk)                                             \
     char *ocontinue = lcontinue;                                               \
     char *obreak = lbreak;                                                     \
@@ -44,8 +46,8 @@ static Node *make_break_node();
 static Node *make_newline_node();
 static Node *make_eof_node();
 static Node *read_stmt();
-static Node *read_decl(bool is_global);
-static Node *read_decl_or_stmt(bool is_global);
+static Node *read_decl();
+static Node *read_decl_or_stmt();
 static Node *make_component_node();
 
 static Type *make_decl_type(Token *token);
@@ -53,6 +55,8 @@ static Type *make_primitive_type(int kind, int size);
 
 static Node *make_decl_and_init_node(Type *type, char *ident, Node *value);
 static Node *make_decl_node(Type *type, char *ident);
+
+static Node *search_var(char *name);
 
 void parse_init() {
     top_levels = vec_init();
@@ -71,7 +75,7 @@ void parse_toplevel() {
             printf("set parse func\n");
             vec_push(node_vec, read_func());
         } else
-            vec_push(node_vec, read_decl_or_stmt(true));
+            vec_push(node_vec, read_decl_or_stmt());
     }
 }
 
@@ -89,6 +93,7 @@ static Node *read_func() {
 
 static Node *make_func_body(Type *functype, char *name, Vector *params) {
     local_vars = vec_init();
+    is_global = false;
     Node *body = make_component_node();
 
     Node *func = (Node *)malloc(sizeof(Node));
@@ -99,6 +104,7 @@ static Node *make_func_body(Type *functype, char *name, Vector *params) {
     func->body = body;
     func->local_vars = local_vars;
 
+    is_global = true;
     local_vars = NULL;
     return func;
 }
@@ -138,6 +144,7 @@ static void make_func_params(Vector *params) {
                 continue;
         }
         ensure_token(T_RPAREN);
+        break;
     }
 }
 
@@ -202,11 +209,6 @@ static void skip_parentheses(Vector *vector) {
     }
 }
 
-static Node *make_ident_node() {
-    Node *node = make_assign_node();
-    return node;
-}
-
 static Node *make_binary_node(int kind, Node *left, Node *right) {
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = kind;
@@ -225,8 +227,66 @@ static Node *make_literal_node() {
     return node;
 }
 
+static Node *make_ident_node() {
+    Token *token = lex();
+
+    Node *node = (Node *)malloc(sizeof(Node));
+    char *name = get_token_val(token);
+
+    if(is_global) {
+        Node *var = search_var(name);
+        if(var == NULL) {
+            printf("undefined variable: %s\n", name);
+            exit(1);
+        }
+
+        node->kind = AST_GVAR;
+        node->type = var->type;
+        node->varname = var->ident;
+    } else {
+        Node *var = search_var(name);
+        if(var == NULL) {
+            printf("undefined variable: %s\n", name);
+            exit(1);
+        }
+
+        node->kind = AST_LVAR;
+        node->type = var->type;
+        node->varname = var->ident;
+        node->loff = var->loff;
+    }
+
+    return node;
+}
+
+static Node *search_var(char *name) {
+    for(int i = 0; i < vec_len(local_vars); i++) {
+        Node *var = vec_get(local_vars, i);
+        if(!strcmp(name, var->ident))
+            return var;
+    }
+
+    for(int i = 0; i < vec_len(global_vars); i++) {
+        Node *var = vec_get(global_vars, i);
+        if(!strcmp(name, var->ident))
+            return var;
+    }
+
+    return NULL;
+}
+
+static Node *make_primary_node() {
+    if(expect_token(T_IDENT))
+        return make_ident_node();
+    else if(expect_token(T_LITERAL))
+        return make_literal_node();
+
+    // 最後にreturnをしているのは特に意味はない
+    return make_literal_node();
+}
+
 static Node *make_mul_sub_node() {
-    Node *node = make_literal_node();
+    Node *node = make_primary_node();
 
     if(next_token(T_MUL))
         return make_binary_node(AST_MUL, node, make_literal_node());
@@ -311,7 +371,7 @@ static Node *make_assign_node() {
 }
 
 static Node *make_actual_assign_node(Node *node, int ast_kind) {
-    // ensure_assign_node(node);
+    ensure_assign_node(node);
     return make_binary_node(ast_kind, node, make_logor_node());
 }
 
@@ -333,7 +393,7 @@ static Node *make_if_node() {
     if(next_token(T_LBRACE)) {
         then = make_component_node();
     } else {
-        then = read_decl_or_stmt(false);
+        then = read_decl_or_stmt();
     }
 
     Node *node = (Node *)malloc(sizeof(Node));
@@ -358,7 +418,7 @@ static Node *make_while_node() {
     if(next_token(T_LBRACE)) {
         then = make_component_node();
     } else {
-        then = read_decl_or_stmt(false);
+        then = read_decl_or_stmt();
     }
 
     RESTORE_JUMP_LABELS();
@@ -388,11 +448,11 @@ static Node *read_stmt() {
         return make_eof_node();
     default:
         unread_token(token);
-        return make_ident_node();
+        return make_assign_node();
     }
 }
 
-static Node *read_decl(bool is_global) {
+static Node *read_decl() {
     Token *type = lex();
     Type *basetype = make_decl_type(type);
     Token *ident_token = lex();
@@ -418,10 +478,10 @@ static Node *read_decl(bool is_global) {
     return node;
 }
 
-static Node *read_decl_or_stmt(bool is_global) {
+static Node *read_decl_or_stmt() {
     Token *tok = peek_token();
     if(is_type(tok)) {
-        return read_decl(is_global);
+        return read_decl();
     } else
         return read_stmt();
 }
@@ -454,7 +514,7 @@ static Node *make_component_node() {
 
     Node *self;
     while(!expect_token(T_RBRACE)) {
-        self = read_decl_or_stmt(false);
+        self = read_decl_or_stmt();
         printf("node kind is %d\n", self->kind);
         vec_push(component, self);
     }
@@ -510,7 +570,7 @@ static Type *make_primitive_type(int kind, int size) {
 
 static Node *make_decl_and_init_node(Type *type, char *ident, Node *value) {
     Node *node = (Node *)malloc(sizeof(Node));
-    node->kind = AST_GLOBAL_DECL;
+    node->kind = is_global ? AST_GLOBAL_DECL : AST_LOCAL_DECL;
     node->type = type;
     node->ident = ident;
     node->val = value;

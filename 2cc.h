@@ -59,6 +59,7 @@ enum { TYPE_INT, TYPE_SHORT, TYPE_LONG, TYPE_CHAR, TYPE_FLOAT, TYPE_DOUBLE };
 
 enum {
     AST_GLOBAL_DECL,
+    AST_LOCAL_DECL,
     AST_GVAR,
     AST_LVAR,
     AST_ADD,
@@ -108,10 +109,10 @@ struct _Node {
     int kind;
     union {
 
-        // assign expression
+        // ident node
         struct {
             char *varname;
-            struct _Node *value;
+            Type *ident_type;
         };
 
         // variable declare
@@ -167,6 +168,7 @@ struct _Type {
 struct _Param {
     Type *type;
     char *name;
+    int loff;
 };
 
 // main.c

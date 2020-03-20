@@ -1,5 +1,5 @@
 int hello = 54;
 
 int hoge(){
-
+    hello = 22
 }
