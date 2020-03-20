@@ -312,6 +312,10 @@ bool is_type(Token *token) {
     return false;
 }
 
+bool is_token_kind(Token *token, int kind) {
+    return get_token_kind(token) == kind;
+}
+
 static Token *make_keyword_token(char *buf) {
     int i;
     for(i = 0; keywords[i].kind != T_DUMMY; i++) {

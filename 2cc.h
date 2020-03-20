@@ -50,6 +50,7 @@ enum {
     T_LBRACE,
     T_RBRACE,
     T_SEMICOLON,
+    T_COMMA,
     T_EOF,
     T_DUMMY
 };
@@ -85,6 +86,8 @@ enum {
     AST_MUL_ASSIGN,
     AST_DIV_ASSIGN,
 
+    AST_FUNCDEF,
+
     AST_EOF,
     AST_END,
 };
@@ -98,6 +101,8 @@ typedef struct _Node Node;
 typedef struct _Type Type;
 
 typedef struct _Map Map;
+
+typedef struct _Param Param;
 
 struct _Node {
     int kind;
@@ -114,6 +119,7 @@ struct _Node {
             Type *type;
             char *ident;
             struct _Node *val;
+            int loff;
         };
 
         // literal
@@ -133,6 +139,15 @@ struct _Node {
             char *lend;
         };
 
+        // function
+        struct {
+            Type *func_type;
+            char *func_name;
+            Vector *params;
+            struct _Node *body;
+            Vector *local_vars;
+        };
+
         // break or continue
         char *jmp_label;
 
@@ -144,6 +159,14 @@ struct _Node {
 struct _Type {
     int kind;
     int size;
+    Vector *params;
+
+    char *ident_name; // 主に関数名や変数名を入れるために使う
+};
+
+struct _Param {
+    Type *type;
+    char *name;
 };
 
 // main.c
@@ -169,6 +192,7 @@ bool expect_token(int kind);
 void ensure_token(int kind);
 char *get_token_val(Token *token);
 bool is_type(Token *token);
+bool is_token_kind(Token *token, int kind);
 
 // parse.c
 

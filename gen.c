@@ -14,6 +14,9 @@ static void emit_while(Node *node);
 static void emit_continue(Node *node);
 static void emit_break(Node *node);
 static void emit_component(Node *node);
+static void emit_assign(Node *node);
+
+static void emit_funcdef(Node *node);
 
 static char *get_resigter_size();
 static void emitf(int line, char *fmt, ...);
@@ -28,6 +31,10 @@ static void emit_log_or(Node *node);
 
 static void emit_data_primitive(Node *node);
 static int eval_intval(Node *node);
+
+static void emit_funcdef(Node *func);
+static void emit_func_prologue(Node *func);
+static void emit_ret();
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -53,11 +60,8 @@ void gen_toplevel(Vector *toplevel) {
         case AST_GLOBAL_DECL:
             emit_global_decl(node);
             break;
-        case AST_IF:
-            emit_if(node);
-            break;
-        case AST_WHILE:
-            emit_while(node);
+        case AST_FUNCDEF:
+            emit_funcdef(node);
             break;
         case AST_END:
             return;
@@ -85,6 +89,38 @@ static void emitf(int line, char *fmt, ...) {
     va_end(args);
 
     fprintf(output_fp, "\n");
+}
+
+static void emit_funcdef(Node *func) {
+    emit_func_prologue(func);
+    emit_expr(func->body);
+    emit_ret();
+}
+
+static void emit_func_prologue(Node *func) {
+    emit_label(func->func_name);
+
+    push("rbp");
+    emit("mov #rsp, #rbp");
+
+    int off = 0;
+    int local_sizes = 0;
+    for(int i = 0; i < vec_len(func->local_vars); i++) {
+        Node *var = vec_get(func->local_vars, i);
+        int size = var->type->size;
+        off -= size;
+        var->loff = off;
+        local_sizes += size;
+    }
+
+    if(local_sizes) {
+        emit("sub $%d, #rsp", local_sizes);
+    }
+}
+
+static void emit_ret() {
+    emit("leave");
+    emit("ret");
 }
 
 static void emit_global_decl(Node *node) {
@@ -179,6 +215,9 @@ static void ensure_gvar_init(Node *node) { emit_expr(node); }
 static void emit_binary(Node *node) {
     char *op = NULL;
     switch(node->kind) {
+    case AST_SIMPLE_ASSIGN:
+        emit_assign(node);
+        return;
     case AST_EQUAL:
         emit_cmp("sete", node);
         return;
@@ -212,6 +251,12 @@ static void emit_binary(Node *node) {
     case AST_DIV:
         emit_arithmetic("div", node);
     }
+}
+
+static void emit_assign(Node *node) {
+    push("rax");
+    emit_expr(node->right);
+    emit("mov #rax, %s(#rip)", node->left->varname);
 }
 
 static void emit_arithmetic(char *inst, Node *node) {

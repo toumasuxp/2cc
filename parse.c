@@ -3,7 +3,8 @@
 static Vector *node_vec;
 static Vector *top_levels;
 
-static Map *global_var;
+static Vector *global_vars;
+static Vector *local_vars;
 
 static char *lcontinue = NULL;
 static char *lbreak = NULL;
@@ -17,6 +18,15 @@ static char *lbreak = NULL;
 #define RESTORE_JUMP_LABELS()                                                  \
     lcontinue = ocontinue;                                                     \
     lbreak = obreak
+
+static Node *read_func();
+static bool is_func();
+static void skip_parentheses(Vector *vector);
+static Param *make_decl_param();
+static void make_func_params(Vector *params);
+static Node *make_func_body(Type *functype, char *name, Vector *params);
+
+static Type *make_func_type(char **name, Type *basetype, Vector *params);
 
 static Node *make_ident_node();
 static Node *make_assign_node();
@@ -34,8 +44,8 @@ static Node *make_break_node();
 static Node *make_newline_node();
 static Node *make_eof_node();
 static Node *read_stmt();
-static Node *read_decl();
-static Node *read_decl_or_stmt();
+static Node *read_decl(bool is_global);
+static Node *read_decl_or_stmt(bool is_global);
 static Node *make_component_node();
 
 static Type *make_decl_type(Token *token);
@@ -47,7 +57,7 @@ static Node *make_decl_node(Type *type, char *ident);
 void parse_init() {
     top_levels = vec_init();
     node_vec = vec_init();
-    global_var = map_init();
+    global_vars = vec_init();
 }
 
 void parse_toplevel() {
@@ -57,7 +67,138 @@ void parse_toplevel() {
         if(get_token_kind(token) == T_EOF)
             return;
 
-        vec_push(node_vec, read_decl_or_stmt());
+        if(is_func()) {
+            printf("set parse func\n");
+            vec_push(node_vec, read_func());
+        } else
+            vec_push(node_vec, read_decl_or_stmt(true));
+    }
+}
+
+static Node *read_func() {
+    Token *token = lex();
+    Type *basetype = make_decl_type(token);
+    char *name;
+    Vector *params = vec_init();
+    Type *functype = make_func_type(&name, basetype, params);
+
+    ensure_token(T_LBRACE);
+    Node *body = make_func_body(functype, name, params);
+    return body;
+}
+
+static Node *make_func_body(Type *functype, char *name, Vector *params) {
+    local_vars = vec_init();
+    Node *body = make_component_node();
+
+    Node *func = (Node *)malloc(sizeof(Node));
+    func->kind = AST_FUNCDEF;
+    func->func_type = functype;
+    func->func_name = name;
+    func->params = params;
+    func->body = body;
+    func->local_vars = local_vars;
+
+    local_vars = NULL;
+    return func;
+}
+
+static Type *make_func_type(char **name, Type *basetype, Vector *params) {
+    Token *token = lex();
+
+    if(!is_token_kind(token, T_IDENT)) {
+        printf("unvalid function decl\n");
+        exit(1);
+    }
+    *name = get_token_val(token);
+
+    ensure_token(T_LPAREN);
+
+    make_func_params(params);
+
+    Type *functype = (Type *)malloc(sizeof(Type));
+    functype->kind = basetype->kind;
+    functype->params = params;
+    functype->size = basetype->size;
+    return functype;
+}
+
+static void make_func_params(Vector *params) {
+    Token *token;
+
+    for(;;) {
+        if(next_token(T_RPAREN))
+            break;
+
+        token = peek_token();
+        if(is_type(token)) {
+            vec_push(params, make_decl_param());
+
+            if(next_token(T_COMMA))
+                continue;
+        }
+        ensure_token(T_RPAREN);
+    }
+}
+
+static Param *make_decl_param() {
+    Token *type_token = lex();
+    Type *type = make_decl_type(type_token);
+
+    Token *ident = lex();
+    if(is_token_kind(ident, T_IDENT)) {
+        Param *param = (Param *)malloc(sizeof(Param));
+        param->type = type;
+        param->name = get_token_val(ident);
+        return param;
+    } else {
+        printf("ERROR!!\n");
+        exit(1);
+    }
+}
+
+static bool is_func() {
+    Vector *vector = vec_init();
+    bool result = false;
+    Token *token;
+    for(;;) {
+        token = lex();
+        vec_push(vector, token);
+
+        if(is_token_kind(token, T_SEMICOLON))
+            break;
+
+        if(is_type(token) || is_token_kind(token, T_IDENT))
+            continue;
+
+        if(is_token_kind(token, T_LPAREN)) {
+            skip_parentheses(vector);
+            continue;
+        }
+
+        result = is_token_kind(token, T_LBRACE);
+        break;
+    }
+
+    while(vec_len(vector) > 0)
+        unread_token(vec_pop(vector));
+
+    return result;
+}
+
+static void skip_parentheses(Vector *vector) {
+    Token *token;
+    for(;;) {
+        token = lex();
+        if(is_token_kind(token, T_EOF)) {
+            printf("premature end of input");
+            exit(1);
+        }
+
+        vec_push(vector, token);
+
+        if(is_token_kind(token, T_RPAREN))
+            break;
     }
 }
 
@@ -170,7 +311,7 @@ static Node *make_assign_node() {
 }
 
 static Node *make_actual_assign_node(Node *node, int ast_kind) {
-    ensure_assign_node(node);
+    // ensure_assign_node(node);
     return make_binary_node(ast_kind, node, make_logor_node());
 }
 
@@ -192,7 +333,7 @@ static Node *make_if_node() {
     if(next_token(T_LBRACE)) {
         then = make_component_node();
     } else {
-        then = read_decl_or_stmt();
+        then = read_decl_or_stmt(false);
     }
 
     Node *node = (Node *)malloc(sizeof(Node));
@@ -217,7 +358,7 @@ static Node *make_while_node() {
     if(next_token(T_LBRACE)) {
         then = make_component_node();
     } else {
-        then = read_decl_or_stmt();
+        then = read_decl_or_stmt(false);
     }
 
     RESTORE_JUMP_LABELS();
@@ -251,7 +392,7 @@ static Node *read_stmt() {
     }
 }
 
-static Node *read_decl() {
+static Node *read_decl(bool is_global) {
     Token *type = lex();
     Type *basetype = make_decl_type(type);
     Token *ident_token = lex();
@@ -268,14 +409,19 @@ static Node *read_decl() {
         node = make_decl_and_init_node(basetype, ident, NULL);
     }
     ensure_token(T_SEMICOLON);
-    map_set(global_var, ident, node);
+
+    if(is_global)
+        vec_push(global_vars, node);
+    else
+        vec_push(local_vars, node);
+
     return node;
 }
 
-static Node *read_decl_or_stmt() {
+static Node *read_decl_or_stmt(bool is_global) {
     Token *tok = peek_token();
     if(is_type(tok)) {
-        return read_decl();
+        return read_decl(is_global);
     } else
         return read_stmt();
 }
@@ -308,7 +454,7 @@ static Node *make_component_node() {
 
     Node *self;
     while(!expect_token(T_RBRACE)) {
-        self = read_decl_or_stmt();
+        self = read_decl_or_stmt(false);
         printf("node kind is %d\n", self->kind);
         vec_push(component, self);
     }
