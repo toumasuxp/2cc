@@ -21,9 +21,7 @@ Map *map_init() {
 }
 
 void *map_get(Map *map, char *key) {
-    int i;
-
-    for(i = map->len - 1; i >= 0; i--) {
+    for(int i = map->len - 1; i >= 0; i--) {
         if(!strcmp(key, map->key[i]))
             return map->val[i];
     }

@@ -3,7 +3,11 @@
 static Vector *node_vec;
 static Vector *top_levels;
 
-static Vector *global_vars;
+/*
+    本当はglobal_varsもVectorにしたいけど、
+    変数と関数を両方格納するためにMapを採用した
+*/
+static Map *global_vars;
 static Vector *local_vars;
 
 static char *lcontinue = NULL;
@@ -43,6 +47,7 @@ static Node *make_cond_node();
 static Node *make_while_node();
 static Node *make_continue_node();
 static Node *make_break_node();
+static Node *make_return_node();
 static Node *make_newline_node();
 static Node *make_eof_node();
 static Node *read_stmt();
@@ -56,26 +61,30 @@ static Type *make_primitive_type(int kind, int size);
 static Node *make_decl_and_init_node(Type *type, char *ident, Node *value);
 static Node *make_decl_node(Type *type, char *ident);
 
+static Node *make_func_call_node(Token *ident);
 static Node *search_var(char *name);
 
 void parse_init() {
     top_levels = vec_init();
     node_vec = vec_init();
-    global_vars = vec_init();
+    global_vars = map_init();
 }
 
 void parse_toplevel() {
     Token *token;
     while(1) {
         token = peek_token();
-        if(get_token_kind(token) == T_EOF)
+        if(get_token_kind(token) == T_EOF) {
+            printf("call t eof\n");
             return;
+        }
 
         if(is_func()) {
             printf("set parse func\n");
             vec_push(node_vec, read_func());
-        } else
+        } else {
             vec_push(node_vec, read_decl_or_stmt());
+        }
     }
 }
 
@@ -88,6 +97,8 @@ static Node *read_func() {
 
     ensure_token(T_LBRACE);
     Node *body = make_func_body(functype, name, params);
+
+    map_set(global_vars, name, body);
     return body;
 }
 
@@ -230,6 +241,9 @@ static Node *make_literal_node() {
 static Node *make_ident_node() {
     Token *token = lex();
 
+    if(next_token(T_LPAREN))
+        return make_func_call_node(token);
+
     Node *node = (Node *)malloc(sizeof(Node));
     char *name = get_token_val(token);
 
@@ -259,17 +273,35 @@ static Node *make_ident_node() {
     return node;
 }
 
-static Node *search_var(char *name) {
-    for(int i = 0; i < vec_len(local_vars); i++) {
-        Node *var = vec_get(local_vars, i);
-        if(!strcmp(name, var->ident))
-            return var;
+static Node *make_func_call_node(Token *ident) {
+    Vector *args = vec_init();
+
+    char *id = get_token_val(ident);
+    Node *func = map_get(global_vars, id);
+    if(func == NULL || func->kind != AST_FUNCDEF) {
+        printf("undefined function: %s\n", get_token_val(ident));
+        exit(1);
     }
 
-    for(int i = 0; i < vec_len(global_vars); i++) {
-        Node *var = vec_get(global_vars, i);
-        if(!strcmp(name, var->ident))
+    // とりあえず今回は引数なしのみ関数呼び出しをできるようにする
+    ensure_token(T_RPAREN);
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_FUNC_CALL;
+    node->call_func_name = func->func_name;
+    node->call_func_type = func->func_type; // ここはいらないかも
+    return node;
+}
+
+static Node *search_var(char *name) {
+    Node *var = map_get(global_vars, name);
+    if(var)
+        return var;
+
+    for(int i = 0; i < vec_len(local_vars); i++) {
+        var = vec_get(local_vars, i);
+        if(!strcmp(name, var->varname)) {
             return var;
+        }
     }
 
     return NULL;
@@ -444,6 +476,8 @@ static Node *read_stmt() {
         return make_break_node();
     case T_CONTINUE:
         return make_continue_node();
+    case T_RETURN:
+        return make_return_node();
     case T_EOF:
         return make_eof_node();
     default:
@@ -471,9 +505,9 @@ static Node *read_decl() {
     ensure_token(T_SEMICOLON);
 
     if(is_global)
-        vec_push(global_vars, node);
+        map_set(global_vars, ident, node);
     else
-        vec_push(local_vars, node);
+        map_set(local_vars, ident, node);
 
     return node;
 }
@@ -484,6 +518,22 @@ static Node *read_decl_or_stmt() {
         return read_decl();
     } else
         return read_stmt();
+}
+
+static Node *make_return_node() {
+    if(next_token(T_SEMICOLON)) {
+        Node *node = (Node *)malloc(sizeof(Node));
+        node->kind = AST_RETURN;
+        return node;
+    }
+
+    Node *retval = make_assign_node();
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_RETURN;
+    node->retval = retval;
+
+    ensure_token(T_SEMICOLON);
+    return node;
 }
 
 static Node *make_break_node() {

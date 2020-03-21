@@ -23,6 +23,7 @@ enum {
     T_IF,
     T_WHILE,
     T_BREAK,
+    T_RETURN,
     T_CONTINUE,
     T_IDENT,
     T_ASSIGN,
@@ -78,6 +79,7 @@ enum {
     AST_IF,
     AST_WHILE,
     AST_BREAK,
+    AST_RETURN,
     AST_CONTINUE,
     AST_NEWLINE,
 
@@ -88,6 +90,7 @@ enum {
     AST_DIV_ASSIGN,
 
     AST_FUNCDEF,
+    AST_FUNC_CALL,
 
     AST_EOF,
     AST_END,
@@ -148,6 +151,16 @@ struct _Node {
             struct _Node *body;
             Vector *local_vars;
         };
+
+        // func call
+        struct {
+            Type *call_func_type;
+            char *call_func_name;
+            Vector *args;
+        };
+
+        // return value
+        struct _Node *retval;
 
         // break or continue
         char *jmp_label;

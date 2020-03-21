@@ -16,11 +16,10 @@ static void emit_binary(Node *node);
 static void emit_if(Node *node);
 static void emit_while(Node *node);
 static void emit_continue(Node *node);
+static void emit_return(Node *node);
 static void emit_break(Node *node);
 static void emit_component(Node *node);
 static void emit_assign(Node *node);
-
-static void emit_funcdef(Node *node);
 
 static char *get_resigter_size();
 static void emitf(int line, char *fmt, ...);
@@ -39,7 +38,7 @@ static int eval_intval(Node *node);
 static void emit_funcdef(Node *func);
 static void emit_func_prologue(Node *func);
 static void emit_ret();
-
+static void emit_func_call(Node *node);
 static void push_func_params(Vector *params);
 
 static void push(char *reg);
@@ -58,10 +57,8 @@ void gen_init() {
 }
 
 void gen_toplevel(Vector *toplevel) {
-    Node *node = NULL;
-    int i = 0;
-    for(node = (Node *)vec_get(toplevel, i++); node != NULL;
-        node = (Node *)vec_get(toplevel, i++)) {
+    for(int i = 0; i < vec_len(toplevel); i++) {
+        Node *node = (Node *)vec_get(toplevel, i);
         switch(node->kind) {
         case AST_GLOBAL_DECL:
             emit_global_decl(node);
@@ -98,9 +95,11 @@ static void emitf(int line, char *fmt, ...) {
 }
 
 static void emit_funcdef(Node *func) {
+    printf("emit_funcdef\n");
     emit_func_prologue(func);
     emit_expr(func->body);
     emit_ret();
+    printf("emit_funcdef end\n");
 }
 
 static void emit_func_prologue(Node *func) {
@@ -206,6 +205,9 @@ static void emit_expr(Node *node) {
     case AST_LITERAL:
         emit_literal(node);
         break;
+    case AST_FUNC_CALL:
+        emit_func_call(node);
+        break;
     case AST_GLOBAL_DECL:
         emit_global_decl(node);
         break;
@@ -217,6 +219,9 @@ static void emit_expr(Node *node) {
         break;
     case AST_CONTINUE:
         emit_continue(node);
+        break;
+    case AST_RETURN:
+        emit_return(node);
         break;
     default:
         emit_binary(node);
@@ -233,6 +238,11 @@ static void emit_component(Node *node) {
 }
 
 static void ensure_gvar_init(Node *node) { emit_expr(node); }
+
+static void emit_func_call(Node *node) {
+    // 引数をサポートしていないので、callを作成するだけ
+    emit("call %s", node->call_func_name);
+}
 
 static void emit_binary(Node *node) {
     char *op = NULL;
@@ -382,6 +392,13 @@ static void emit_while(Node *node) {
 static void emit_break(Node *node) { emit_jmp(node->jmp_label); }
 
 static void emit_continue(Node *node) { emit_jmp(node->jmp_label); }
+
+static void emit_return(Node *node) {
+    if(node->retval)
+        emit_expr(node->retval);
+
+    emit_ret();
+}
 
 static void emit_je(char *label) {
     emit("test #rax, #rax");

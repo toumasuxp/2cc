@@ -13,12 +13,13 @@ struct KeyWord {
 };
 
 static struct KeyWord keywords[] = {
-    {T_IF, "if", false},       {T_WHILE, "while", false},
-    {T_BREAK, "break", false}, {T_CONTINUE, "continue", false},
+    {T_IF, "if", false},         {T_WHILE, "while", false},
+    {T_BREAK, "break", false},   {T_CONTINUE, "continue", false},
+    {T_RETURN, "return", false},
 
-    {T_INT, "int", true},      {T_CHAR, "char", true},
-    {T_FLOAT, "float", true},  {T_DOUBLE, "double", true},
-    {T_LONG, "long", true},    {T_SHORT, "short", true},
+    {T_INT, "int", true},        {T_CHAR, "char", true},
+    {T_FLOAT, "float", true},    {T_DOUBLE, "double", true},
+    {T_LONG, "long", true},      {T_SHORT, "short", true},
 
     {T_DUMMY, "dummy", false}};
 
@@ -43,7 +44,7 @@ static Token *read_rbracket();
 static Token *read_and();
 static Token *read_or();
 static Token *make_kind_token(int kind);
-static Token *make_op_token(int kind);
+static Token *make_op_token(char c, int kind);
 static Token *make_keyword_token(char *buf);
 
 static bool is_keyword(char *buf);
@@ -92,10 +93,11 @@ Token *lex() {
             return read_or();
 #define op(c, t)                                                               \
     case c:                                                                    \
-        return make_op_token(t);
+        return make_op_token(c, t);
 #include "opcode.inc"
 #undef op
         case '\n':
+        case '\r':
             continue;
         case EOF:
             return make_eof_token();
@@ -285,9 +287,11 @@ static Token *make_eof_token() {
     return tok;
 }
 
-static Token *make_op_token(int kind) {
+static Token *make_op_token(char c, int kind) {
     Token *tok = (Token *)malloc(sizeof(Token));
     tok->kind = kind;
+
+    printf("op token %c\n", c);
     return tok;
 }
 
