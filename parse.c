@@ -83,7 +83,7 @@ void parse_toplevel() {
             printf("set parse func\n");
             vec_push(node_vec, read_func());
         } else {
-            vec_push(node_vec, read_decl_or_stmt());
+            vec_push(node_vec, read_decl());
         }
     }
 }
@@ -507,7 +507,7 @@ static Node *read_decl() {
     if(is_global)
         map_set(global_vars, ident, node);
     else
-        map_set(local_vars, ident, node);
+        vec_set(local_vars, node);
 
     return node;
 }
