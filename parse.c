@@ -695,11 +695,16 @@ static Type *make_primitive_type(int kind, int size) {
 }
 
 static Node *make_decl_and_init_node(Type *type, char *ident, Node *value) {
+    static loff = 0;
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = is_global ? AST_GLOBAL_DECL : AST_LOCAL_DECL;
     node->type = type;
     node->ident = ident;
     node->val = value;
+    if(!is_global) {
+        loff -= type->size;
+        node->loff = loff;
+    }
 
     return node;
 }
