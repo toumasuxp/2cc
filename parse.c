@@ -64,6 +64,13 @@ static Node *make_decl_node(Type *type, char *ident);
 static Node *make_func_call_node(Token *ident);
 static Node *search_var(char *name);
 
+static Type *read_declator(char **name, Type *basetype);
+static Type *make_ptr_type(Type *basetype);
+
+static Node *make_unary_node();
+static Node *make_unary_addr_node();
+static Node *make_unary_deref_node();
+
 void parse_init() {
     top_levels = vec_init();
     node_vec = vec_init();
@@ -293,13 +300,16 @@ static Node *make_func_call_node(Token *ident) {
 }
 
 static Node *search_var(char *name) {
+    printf("searching... %s\n", name);
     Node *var = map_get(global_vars, name);
     if(var)
         return var;
 
+    printf("searching local var.... %s\n", name);
     for(int i = 0; i < vec_len(local_vars); i++) {
         var = vec_get(local_vars, i);
-        if(!strcmp(name, var->varname)) {
+        if(!strcmp(name, var->ident)) {
+            printf("complete searching local var.... %s\n", name);
             return var;
         }
     }
@@ -317,8 +327,43 @@ static Node *make_primary_node() {
     return make_literal_node();
 }
 
+static Node *make_unary_node() {
+    printf("unary_addr node\n");
+    if(next_token(T_MUL))
+        return make_unary_deref_node();
+
+    if(next_token(T_AND)) {
+        printf("unary and addr\n");
+        return make_unary_addr_node();
+    }
+
+    return make_primary_node();
+}
+
+static Node *make_unary_deref_node() {
+    Node *operand = make_primary_node();
+    if(operand->type->kind != TYPE_POINTER) {
+        printf("should be pointer variable. but, this is %d\n",
+               operand->type->kind);
+    }
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_DEREF;
+    node->operand = operand;
+    return node;
+}
+
+static Node *make_unary_addr_node() {
+    printf("make_unary_addr_node\n");
+    Node *operand = make_primary_node();
+
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_ADDR;
+    node->operand = operand;
+    return node;
+}
+
 static Node *make_mul_sub_node() {
-    Node *node = make_primary_node();
+    Node *node = make_unary_node();
 
     if(next_token(T_MUL))
         return make_binary_node(AST_MUL, node, make_literal_node());
@@ -408,7 +453,8 @@ static Node *make_actual_assign_node(Node *node, int ast_kind) {
 }
 
 static void *ensure_assign_node(Node *node) {
-    if(node->kind != AST_GVAR && node->kind != AST_LVAR) {
+    if(node->kind != AST_GVAR && node->kind != AST_LVAR &&
+       node->kind != AST_DEREF) {
         printf("unvalid token error: should AST_GVAR or AST_LVAR\n");
         exit(1);
     }
@@ -487,29 +533,59 @@ static Node *read_stmt() {
 }
 
 static Node *read_decl() {
+    char *ident;
     Token *type = lex();
     Type *basetype = make_decl_type(type);
-    Token *ident_token = lex();
-    char *ident = get_token_val(ident_token);
-    if(get_token_kind(ident_token) != T_IDENT) {
-        printf("unvalid token : should be ident token\n");
-        exit(1);
-    }
+    Type *declator = read_declator(&ident, basetype);
+
     Node *node;
     if(next_token(T_ASSIGN)) {
+        printf("make_decl_and_init_node\n");
         Node *value = make_logor_node();
-        node = make_decl_and_init_node(basetype, ident, value);
+        node = make_decl_and_init_node(declator, ident, value);
+        printf("make_decl_and_init_node end\n");
     } else {
-        node = make_decl_and_init_node(basetype, ident, NULL);
+        node = make_decl_and_init_node(declator, ident, NULL);
     }
     ensure_token(T_SEMICOLON);
 
-    if(is_global)
+    if(is_global) {
+        printf("set %s in global vars\n", ident);
         map_set(global_vars, ident, node);
-    else
-        vec_set(local_vars, node);
-
+    } else {
+        printf("set %s in local vars\n", ident);
+        vec_push(local_vars, node);
+    }
     return node;
+}
+
+static Type *read_declator(char **name, Type *basetype) {
+    /* 本当は8ccのようにnext_token('*')という実装にするのが綺麗だけど、
+       今回はこれでいく
+    */
+    if(next_token(T_MUL)) { // if pointer declare
+        printf("pointer declater\n");
+        return read_declator(name, make_ptr_type(basetype));
+    }
+
+    Token *token = lex();
+    if(is_token_kind(token, T_IDENT)) {
+        printf("ident declater\n");
+        *name = get_token_val(token);
+        return basetype;
+    }
+
+    printf("ERROR read_declater\n");
+    return NULL;
+}
+
+static Type *make_ptr_type(Type *basetype) {
+    Type *type = (Type *)malloc(sizeof(Type));
+    type->kind = TYPE_POINTER;
+    type->pointer_type = basetype;
+    type->size = 8;
+
+    return type;
 }
 
 static Node *read_decl_or_stmt() {

@@ -268,6 +268,8 @@ static Token *read_rbracket() {
 static Token *read_and() {
     if(expectc('&'))
         return make_kind_token(T_BIN_AND);
+
+    return make_kind_token(T_AND);
 }
 
 static Token *read_or() {

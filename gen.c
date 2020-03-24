@@ -41,6 +41,16 @@ static void emit_ret();
 static void emit_func_call(Node *node);
 static void push_func_params(Vector *params);
 
+static void emit_deref(Node *node);
+static void emit_addr(Node *node);
+static void emit_assign_deref(Node *node);
+
+static void emit_lvar(Node *node);
+
+static void emit_local_decl(Node *node);
+
+static void emit_lload(Node *node, char *inst);
+
 static void push(char *reg);
 static void pop(char *reg);
 
@@ -150,6 +160,12 @@ static void emit_global_decl(Node *node) {
     emit_data_primitive(node);
 }
 
+static void emit_local_decl(Node *node) {
+    printf("emit_local_decl\n");
+    emit_expr(node->val);
+    emit_lsave(node);
+}
+
 static void emit_data_primitive(Node *node) {
     switch(node->type->size) {
     case 1:
@@ -205,11 +221,23 @@ static void emit_expr(Node *node) {
     case AST_LITERAL:
         emit_literal(node);
         break;
+    case AST_LVAR:
+        emit_lvar(node);
+        break;
+    case AST_DEREF:
+        emit_deref(node);
+        break;
+    case AST_ADDR:
+        emit_addr(node);
+        break;
     case AST_FUNC_CALL:
         emit_func_call(node);
         break;
     case AST_GLOBAL_DECL:
         emit_global_decl(node);
+        break;
+    case AST_LOCAL_DECL:
+        emit_local_decl(node);
         break;
     case AST_COMPONENT:
         emit_component(node);
@@ -236,6 +264,8 @@ static void emit_component(Node *node) {
     for(i = 0; i < vec_len(stmt); i++)
         emit_expr(vec_get(stmt, i));
 }
+
+static void emit_lvar(Node *node) { emit_lload(node, "rbp"); }
 
 static void ensure_gvar_init(Node *node) { emit_expr(node); }
 
@@ -286,18 +316,24 @@ static void emit_binary(Node *node) {
 }
 
 static void emit_assign(Node *node) {
+    printf("emit_assign\n");
     push("rax");
     emit_expr(node->right);
-    emit_store(node->left, node->kind);
-    emit("mov #rax, %s(#rip)", node->left->varname);
+    emit_store(node->left, node->left->kind);
 }
 
 static void emit_store(Node *node, int kind) {
     switch(kind) {
-    case AST_LOCAL_DECL:
+    case AST_DEREF:
+        printf("emit_store AST_DEREF\n");
+        emit_assign_deref(node);
+        break;
+    case AST_LVAR:
+        printf("emit_store AST_LVAR\n");
         emit_lsave(node);
         return;
-    case AST_GLOBAL_DECL:
+    case AST_GVAR:
+        printf("emit_store AST_GVAR\n");
         emit_gsave(node);
         return;
     }
@@ -313,6 +349,14 @@ static void emit_lsave(Node *var) {
     char *reg = get_resigter_size();
     char *addr = format("%d(%%rbp)", var->loff);
     emit("mov %s, %s", reg, addr);
+}
+
+static void emit_assign_deref(Node *node) {
+    push("rax");
+    emit_expr(node->operand);
+    emit("mov (#rsp), #rcx");
+    emit("mov #rcx, %d(#rax)", node->operand->loff);
+    pop("rax");
 }
 
 static void emit_arithmetic(char *inst, Node *node) {
@@ -398,6 +442,22 @@ static void emit_return(Node *node) {
         emit_expr(node->retval);
 
     emit_ret();
+}
+
+static void emit_deref(Node *node) {
+    printf("emit_deref\n");
+    emit_expr(node->operand);
+    emit_noindent(".emit_deref");
+    emit_lload(node->operand, "rax");
+}
+
+static void emit_lload(Node *node, char *inst) {
+    emit("mov %d(#%s), #rax", node->loff, inst);
+}
+
+static void emit_addr(Node *node) {
+    printf("emit_addr\n");
+    emit("lea %d(#rbp), #rax", node->operand->loff);
 }
 
 static void emit_je(char *label) {

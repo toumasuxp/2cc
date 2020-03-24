@@ -39,6 +39,8 @@ enum {
     T_BIN_AND,
     T_BIN_OR,
 
+    T_AND,
+
     T_INT,
     T_CHAR,
     T_SHORT,
@@ -56,7 +58,15 @@ enum {
     T_DUMMY
 };
 
-enum { TYPE_INT, TYPE_SHORT, TYPE_LONG, TYPE_CHAR, TYPE_FLOAT, TYPE_DOUBLE };
+enum {
+    TYPE_INT,
+    TYPE_SHORT,
+    TYPE_LONG,
+    TYPE_CHAR,
+    TYPE_FLOAT,
+    TYPE_DOUBLE,
+    TYPE_POINTER
+};
 
 enum {
     AST_GLOBAL_DECL,
@@ -80,6 +90,8 @@ enum {
     AST_WHILE,
     AST_BREAK,
     AST_RETURN,
+    AST_DEREF,
+    AST_ADDR,
     AST_CONTINUE,
     AST_NEWLINE,
 
@@ -165,6 +177,9 @@ struct _Node {
         // break or continue
         char *jmp_label;
 
+        // for pointer dereference
+        struct _Node *operand;
+
         // statement
         Vector *stmt;
     };
@@ -174,6 +189,7 @@ struct _Type {
     int kind;
     int size;
     Vector *params;
+    struct _Type *pointer_type;
 
     char *ident_name; // 主に関数名や変数名を入れるために使う
 };
