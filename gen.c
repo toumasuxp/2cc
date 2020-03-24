@@ -457,7 +457,15 @@ static void emit_lload(Node *node, char *inst) {
 
 static void emit_addr(Node *node) {
     printf("emit_addr\n");
-    emit("lea %d(#rbp), #rax", node->operand->loff);
+    switch(node->operand->kind) {
+    case AST_LVAR:
+        emit("lea %d(#rbp), #rax", node->operand->loff);
+        return;
+    case AST_GVAR:
+        printf("emit_addr GVAR\n");
+        emit("lea %s(#rip), #rax", node->operand->varname);
+        return;
+    }
 }
 
 static void emit_je(char *label) {

@@ -1,8 +1,9 @@
+int foo = 4;
 
 int hoge(){
     int hello = 54;
-    int *po = &hello;
-    *po = 5
+    int *po = &foo;
+    
 }
 
 int main(){

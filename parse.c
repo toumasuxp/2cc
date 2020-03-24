@@ -254,23 +254,20 @@ static Node *make_ident_node() {
     Node *node = (Node *)malloc(sizeof(Node));
     char *name = get_token_val(token);
 
-    if(is_global) {
-        Node *var = search_var(name);
-        if(var == NULL) {
-            printf("undefined variable: %s\n", name);
-            exit(1);
-        }
+    Node *var = search_var(name);
+    if(var == NULL) {
+        printf("undefined variable: %s\n", name);
+        exit(1);
+    }
 
+    // この比較の方法はよくない。
+    if(var->kind == AST_GLOBAL_DECL) {
+        printf("make_ident_node GVAR %s\n", var->ident);
         node->kind = AST_GVAR;
         node->type = var->type;
         node->varname = var->ident;
     } else {
-        Node *var = search_var(name);
-        if(var == NULL) {
-            printf("undefined variable: %s\n", name);
-            exit(1);
-        }
-
+        printf("make_ident_node LVAR %s\n", var->ident);
         node->kind = AST_LVAR;
         node->type = var->type;
         node->varname = var->ident;
@@ -302,14 +299,16 @@ static Node *make_func_call_node(Token *ident) {
 static Node *search_var(char *name) {
     printf("searching... %s\n", name);
     Node *var = map_get(global_vars, name);
-    if(var)
+    if(var) {
+        printf("search GVAR %s\n", name);
         return var;
+    }
 
     printf("searching local var.... %s\n", name);
     for(int i = 0; i < vec_len(local_vars); i++) {
         var = vec_get(local_vars, i);
         if(!strcmp(name, var->ident)) {
-            printf("complete searching local var.... %s\n", name);
+            printf("search LVAR %s\n", name);
             return var;
         }
     }
