@@ -9,7 +9,7 @@ static void emit_global_decl(Node *node);
 static void ensure_gvar_init(Node *node);
 static void emit_store(Node *node, int kind);
 static void emit_gsave(Node *var);
-static void emit_lsave(Node *var);
+static void emit_lsave(int loff);
 static void emit_expr(Node *node);
 static void emit_literal(Node *node);
 static void emit_binary(Node *node);
@@ -32,8 +32,9 @@ static void emit_arithmetic(char *inst, Node *node);
 static void emit_log_and(Node *node);
 static void emit_log_or(Node *node);
 
-static void emit_data_primitive(Node *node);
-static int eval_intval(Node *node);
+static void emit_global_data(Node *node);
+static void emit_global_data_array(Node *node);
+static void emit_data_primitive(Node *val, Type *type);
 
 static void emit_funcdef(Node *func);
 static void emit_func_prologue(Node *func);
@@ -51,6 +52,9 @@ static void emit_local_decl(Node *node);
 
 static void emit_lload(Node *node, char *inst);
 static void emit_gvar(Node *node);
+
+static char *get_data_size(int size);
+static void emit_local_data_array(Node *node);
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -158,60 +162,77 @@ static void emit_ret() {
 static void emit_global_decl(Node *node) {
     emit(".data");
     emit_label(node->ident);
-    emit_data_primitive(node);
+    emit_global_data(node);
+}
+
+static void emit_global_data(Node *node) {
+    switch(node->type->kind) {
+    case TYPE_ARRAY:
+        emit_global_data_array(node);
+        break;
+    default:
+        emit_data_primitive(node->val, node->type);
+    }
+}
+
+static void emit_global_data_array(Node *node) {
+
+    for(int i = 0; i < node->type->array_len; i++) {
+        Node *val = vec_get(node->val->array_init_list, i);
+
+        if(val) {
+            emit_data_primitive(val, node->type->pointer_type);
+        } else {
+            char *data_size = get_data_size(node->type->pointer_type->size);
+            emit("%s 0", data_size);
+        }
+    }
+}
+
+static char *get_data_size(int size) {
+    switch(size) {
+    case 1:
+        return format(".byte ");
+    case 4:
+        return format(".int ");
+    case 8:
+        return format(".quad ");
+    }
 }
 
 static void emit_local_decl(Node *node) {
     printf("emit_local_decl\n");
-    emit_expr(node->val);
-    emit_lsave(node);
-}
-
-static void emit_data_primitive(Node *node) {
-    switch(node->type->size) {
-    case 1:
-        emit(".byte %d", eval_intval(node->val));
+    switch(node->type->kind) {
+    case TYPE_ARRAY:
+        emit_local_data_array(node);
         break;
-    case 2:
-        emit(".word %d", eval_intval(node->val));
-        break;
-    case 4:
-        emit(".int %d", eval_intval(node->val));
-        break;
+    default:
+        emit_expr(node->val);
+        emit_lsave(node->loff);
     }
 }
 
-static int eval_intval(Node *node) {
-    switch(node->kind) {
-    case AST_LITERAL:
-        return node->int_val;
-#define L eval_intval(node->left)
-#define R eval_intval(node->right)
-    case AST_ADD:
-        return L + R;
-    case AST_SUB:
-        return L - R;
-    case AST_MUL:
-        return L * R;
-    case AST_DIV:
-        return L / R;
-    case AST_LESS_EQ:
-        return L <= R;
-    case AST_LESS:
-        return L < R;
-    case AST_GRE:
-        return L > R;
-    case AST_GRE_EQ:
-        return L >= R;
-    case AST_LOG_AND:
-        return L && R;
-    case AST_LOG_OR:
-        return L || R;
-#undef L
-#undef R
-    default:
-        printf("ERROR!! eval_intval\n");
-        exit(1);
+static void emit_local_data_array(Node *node) {
+    Node *val;
+    for(int i = 0; i < vec_len(node->val->array_init_list); i++) {
+        int loff = node->loff + node->type->pointer_type->size * i;
+        Node *val = vec_get(node->val->array_init_list, i);
+        emit_expr(val);
+        emit_lsave(loff);
+    }
+}
+
+static void emit_data_primitive(Node *val, Type *type) {
+    switch(type->size) {
+    case 1:
+        emit(".byte %d", eval_intval(val));
+        break;
+    case 2:
+        emit(".word %d", eval_intval(val));
+        break;
+    case 4:
+        emit(".int %d", eval_intval(val));
+        break;
     }
 }
 
@@ -337,7 +358,7 @@ static void emit_store(Node *node, int kind) {
         break;
     case AST_LVAR:
         printf("emit_store AST_LVAR\n");
-        emit_lsave(node);
+        emit_lsave(node->loff);
         return;
     case AST_GVAR:
         printf("emit_store AST_GVAR\n");
@@ -352,9 +373,9 @@ static void emit_gsave(Node *var) {
     emit("mov %s, %s", reg, addr);
 }
 
-static void emit_lsave(Node *var) {
+static void emit_lsave(int loff) {
     char *reg = get_resigter_size();
-    char *addr = format("%d(%%rbp)", var->loff);
+    char *addr = format("%d(%%rbp)", loff);
     emit("mov %s, %s", reg, addr);
 }
 

@@ -52,6 +52,8 @@ enum {
     T_RPAREN,
     T_LBRACE,
     T_RBRACE,
+    T_LBRACKET,
+    T_RBRACKET,
     T_SEMICOLON,
     T_COMMA,
     T_EOF,
@@ -104,6 +106,8 @@ enum {
 
     AST_FUNCDEF,
     AST_FUNC_CALL,
+
+    AST_ARRAY_INIT,
 
     AST_EOF,
     AST_END,
@@ -181,6 +185,9 @@ struct _Node {
         // for pointer dereference
         struct _Node *operand;
 
+        // array init list
+        Vector *array_init_list;
+
         // statement
         Vector *stmt;
     };
@@ -191,7 +198,7 @@ struct _Type {
     int size;
     Vector *params;
     struct _Type *pointer_type; // for pointer or array
-    int array_size;
+    int array_len;
     char *ident_name; // 主に関数名や変数名を入れるために使う
 };
 
@@ -231,6 +238,8 @@ bool is_token_kind(Token *token, int kind);
 void parse_toplevel();
 void parse_init();
 Vector *get_top_levels();
+
+int eval_intval(Node *node);
 
 // vector.c
 

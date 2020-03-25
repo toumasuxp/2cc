@@ -6,6 +6,7 @@ int main() {
     gen_init();
     file_init("sample.dd");
     parse_toplevel();
+    printf("start gen code\n");
     Vector *tops = get_top_levels();
     gen_toplevel(tops);
 

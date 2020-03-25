@@ -3,6 +3,8 @@
 static Vector *node_vec;
 static Vector *top_levels;
 
+static int loff = 0;
+
 /*
     本当はglobal_varsもVectorにしたいけど、
     変数と関数を両方格納するためにMapを採用した
@@ -73,6 +75,14 @@ static Type *make_ptr_type(Type *basetype);
 static Node *make_unary_node();
 static Node *make_unary_addr_node();
 static Node *make_unary_deref_node();
+
+static Type *make_array_type(Type *base, int len);
+
+static Type *read_declator_tail_array(char **name, Type *basetype);
+static Type *read_declator_tail(char **name, Type *basetype);
+
+static Node *make_decl_init_node(Type *type);
+static Node *make_decl_array_init(Type *type);
 
 void parse_init() {
     top_levels = vec_init();
@@ -527,7 +537,7 @@ static Node *read_decl() {
     Node *node;
     if(next_token(T_ASSIGN)) {
         printf("make_decl_and_init_node\n");
-        Node *value = make_logor_node();
+        Node *value = make_decl_init_node(declator);
         node = make_decl_and_init_node(declator, varname, value);
         printf("make_decl_and_init_node end\n");
     } else {
@@ -571,14 +581,83 @@ static Type *read_declator(char **name, Type *basetype) {
     }
 
     Token *token = lex();
-    if(is_token_kind(token, T_IDENT)) {
-        printf("ident declater\n");
-        *name = get_token_val(token);
-        return basetype;
+    if(!is_token_kind(token, T_IDENT)) {
+        printf("unvalid declare. should be T_IDENT\n");
+        exit(1);
     }
 
-    printf("ERROR read_declater\n");
-    return NULL;
+    *name = get_token_val(token);
+    return read_declator_tail(name, basetype);
+}
+
+static Type *read_declator_tail(char **name, Type *basetype) {
+    if(next_token(T_LBRACKET))
+        return read_declator_tail_array(name, basetype);
+
+    return basetype;
+}
+
+static Type *read_declator_tail_array(char **name, Type *basetype) {
+    int len;
+
+    if(next_token(T_RBRACKET))
+        len = -1;
+    else {
+        len = eval_intval(make_mul_sub_node());
+        ensure_token(T_RBRACKET);
+    }
+    return make_array_type(basetype, len);
+}
+
+static Type *make_array_type(Type *base, int len) {
+    int size;
+    if(len < 0)
+        size = -1;
+    else
+        size = base->size * len;
+
+    Type *type = (Type *)malloc(sizeof(Type));
+    type->kind = TYPE_ARRAY;
+    type->pointer_type = base;
+    type->array_len = len;
+    type->size = size;
+    return type;
+}
+
+static Node *make_decl_init_node(Type *type) {
+    if(next_token(T_LBRACE)) {
+        printf("make_decl_array_init\n");
+        return make_decl_array_init(type);
+    }
+
+    return make_logor_node();
+}
+
+static Node *make_decl_array_init(Type *type) {
+    int elemsize = type->pointer_type->size;
+    bool flexible = (type->array_len <= 0);
+    Vector *array_list = vec_init();
+    int i;
+    for(i = 0; flexible || i < type->array_len + 1; i++) {
+
+        if(next_token(T_RBRACE))
+            break;
+
+        Node *expr = make_logor_node();
+        vec_push(array_list, expr);
+
+        next_token(T_COMMA);
+    }
+
+    if(flexible) {
+        type->array_len = i;
+        type->size = type->pointer_type->size * i;
+    }
+
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_ARRAY_INIT;
+    node->array_init_list = array_list;
+    return node;
 }
 
 static Type *make_ptr_type(Type *basetype) {
@@ -697,7 +776,6 @@ static Type *make_primitive_type(int kind, int size) {
 }
 
 static Node *make_decl_and_init_node(Type *type, char *ident, Node *value) {
-    static loff = 0;
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = is_global ? AST_GLOBAL_DECL : AST_LOCAL_DECL;
     node->type = type;
@@ -719,4 +797,38 @@ static Node *make_decl_node(Type *type, char *ident) {
     node->val = NULL;
 
     return node;
+}
+
+int eval_intval(Node *node) {
+    switch(node->kind) {
+    case AST_LITERAL:
+        return node->int_val;
+#define L eval_intval(node->left)
+#define R eval_intval(node->right)
+    case AST_ADD:
+        return L + R;
+    case AST_SUB:
+        return L - R;
+    case AST_MUL:
+        return L * R;
+    case AST_DIV:
+        return L / R;
+    case AST_LESS_EQ:
+        return L <= R;
+    case AST_LESS:
+        return L < R;
+    case AST_GRE:
+        return L > R;
+    case AST_GRE_EQ:
+        return L >= R;
+    case AST_LOG_AND:
+        return L && R;
+    case AST_LOG_OR:
+        return L || R;
+#undef L
+#undef R
+    default:
+        printf("ERROR!! eval_intval\n");
+        exit(1);
+    }
 }
