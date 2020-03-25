@@ -55,6 +55,9 @@ static Node *read_decl();
 static Node *read_decl_or_stmt();
 static Node *make_component_node();
 
+static Node *ast_gvar(char *varname, Type *declator);
+static Node *ast_lvar(char *varname, Type *declator);
+
 static Type *make_decl_type(Token *token);
 static Type *make_primitive_type(int kind, int size);
 
@@ -251,7 +254,6 @@ static Node *make_ident_node() {
     if(next_token(T_LPAREN))
         return make_func_call_node(token);
 
-    Node *node = (Node *)malloc(sizeof(Node));
     char *name = get_token_val(token);
 
     Node *var = search_var(name);
@@ -259,22 +261,7 @@ static Node *make_ident_node() {
         printf("undefined variable: %s\n", name);
         exit(1);
     }
-
-    // この比較の方法はよくない。
-    if(var->kind == AST_GLOBAL_DECL) {
-        printf("make_ident_node GVAR %s\n", var->ident);
-        node->kind = AST_GVAR;
-        node->type = var->type;
-        node->varname = var->ident;
-    } else {
-        printf("make_ident_node LVAR %s\n", var->ident);
-        node->kind = AST_LVAR;
-        node->type = var->type;
-        node->varname = var->ident;
-        node->loff = var->loff;
-    }
-
-    return node;
+    return var;
 }
 
 static Node *make_func_call_node(Token *ident) {
@@ -328,10 +315,10 @@ static Node *make_primary_node() {
 
 static Node *make_unary_node() {
     printf("unary_addr node\n");
-    if(next_token(T_MUL))
+    if(next_token(T_MUL)) // *
         return make_unary_deref_node();
 
-    if(next_token(T_AND)) {
+    if(next_token(T_AND)) { // &
         printf("unary and addr\n");
         return make_unary_addr_node();
     }
@@ -532,29 +519,45 @@ static Node *read_stmt() {
 }
 
 static Node *read_decl() {
-    char *ident;
+    char *varname;
     Token *type = lex();
     Type *basetype = make_decl_type(type);
-    Type *declator = read_declator(&ident, basetype);
+    Type *declator = read_declator(&varname, basetype);
 
     Node *node;
     if(next_token(T_ASSIGN)) {
         printf("make_decl_and_init_node\n");
         Node *value = make_logor_node();
-        node = make_decl_and_init_node(declator, ident, value);
+        node = make_decl_and_init_node(declator, varname, value);
         printf("make_decl_and_init_node end\n");
     } else {
-        node = make_decl_and_init_node(declator, ident, NULL);
+        node = make_decl_and_init_node(declator, varname, NULL);
     }
     ensure_token(T_SEMICOLON);
 
     if(is_global) {
-        printf("set %s in global vars\n", ident);
-        map_set(global_vars, ident, node);
+        printf("set %s in global vars\n", varname);
+        map_set(global_vars, varname, ast_gvar(varname, declator));
     } else {
-        printf("set %s in local vars\n", ident);
-        vec_push(local_vars, node);
+        printf("set %s in local vars\n", varname);
+        vec_push(local_vars, ast_lvar(varname, declator));
     }
+    return node;
+}
+
+static Node *ast_gvar(char *varname, Type *declator) {
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_GVAR;
+    node->ident = varname;
+    node->type = declator;
+    return node;
+}
+
+static Node *ast_lvar(char *varname, Type *declator) {
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_LVAR;
+    node->ident = varname;
+    node->type = declator;
     return node;
 }
 

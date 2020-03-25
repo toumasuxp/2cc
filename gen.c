@@ -50,6 +50,7 @@ static void emit_lvar(Node *node);
 static void emit_local_decl(Node *node);
 
 static void emit_lload(Node *node, char *inst);
+static void emit_gvar(Node *node);
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -221,6 +222,10 @@ static void emit_expr(Node *node) {
     case AST_LITERAL:
         emit_literal(node);
         break;
+    case AST_GVAR:
+        printf("emit_addr AST_GVAR\n");
+        emit_gvar(node);
+        break;
     case AST_LVAR:
         emit_lvar(node);
         break;
@@ -228,7 +233,8 @@ static void emit_expr(Node *node) {
         emit_deref(node);
         break;
     case AST_ADDR:
-        emit_addr(node);
+        printf("emit_addr AST_ADDR\n");
+        emit_addr(node->operand);
         break;
     case AST_FUNC_CALL:
         emit_func_call(node);
@@ -267,6 +273,7 @@ static void emit_component(Node *node) {
 
 static void emit_lvar(Node *node) { emit_lload(node, "rbp"); }
 
+static void emit_gvar(Node *node) {}
 static void ensure_gvar_init(Node *node) { emit_expr(node); }
 
 static void emit_func_call(Node *node) {
@@ -341,7 +348,7 @@ static void emit_store(Node *node, int kind) {
 
 static void emit_gsave(Node *var) {
     char *reg = get_resigter_size();
-    char *addr = format("%s(%%rip)", var->varname);
+    char *addr = format("%s(%%rip)", var->ident);
     emit("mov %s, %s", reg, addr);
 }
 
@@ -457,13 +464,14 @@ static void emit_lload(Node *node, char *inst) {
 
 static void emit_addr(Node *node) {
     printf("emit_addr\n");
-    switch(node->operand->kind) {
+    switch(node->kind) {
     case AST_LVAR:
-        emit("lea %d(#rbp), #rax", node->operand->loff);
+        printf("emit_addr LVAR\n");
+        emit("lea %d(#rbp), #rax", node->loff);
         return;
     case AST_GVAR:
         printf("emit_addr GVAR\n");
-        emit("lea %s(#rip), #rax", node->operand->varname);
+        emit("lea %d+%s(#rip), #rax", node->loff, node->ident);
         return;
     }
 }

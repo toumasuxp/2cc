@@ -65,7 +65,8 @@ enum {
     TYPE_CHAR,
     TYPE_FLOAT,
     TYPE_DOUBLE,
-    TYPE_POINTER
+    TYPE_POINTER,
+    TYPE_ARRAY
 };
 
 enum {
@@ -189,8 +190,8 @@ struct _Type {
     int kind;
     int size;
     Vector *params;
-    struct _Type *pointer_type;
-
+    struct _Type *pointer_type; // for pointer or array
+    int array_size;
     char *ident_name; // 主に関数名や変数名を入れるために使う
 };
 
