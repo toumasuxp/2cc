@@ -82,7 +82,7 @@ static Type *make_array_type(Type *base, int len);
 static Type *read_declator_tail_array(char **name, Type *basetype);
 static Type *read_declator_tail(char **name, Type *basetype);
 
-static Node *make_decl_init_node(Type *type);
+static Node *ast_decl(Type *type);
 static Node *make_decl_array_init(Type *type);
 static Node *make_array_elm_node(Node *var);
 
@@ -586,8 +586,7 @@ static Node *read_decl() {
     Node *node;
     if(next_token(T_ASSIGN)) {
         printf("make_decl_and_init_node\n");
-        Node *value = make_decl_init_node(declator);
-        node = make_decl_and_init_node(declator, var, value);
+        node = make_decl_and_init_node(declator, var, ast_decl(declator));
         printf("make_decl_and_init_node end\n");
     } else {
         node = make_decl_and_init_node(declator, var, NULL);
@@ -671,7 +670,7 @@ static Type *make_array_type(Type *base, int len) {
     return type;
 }
 
-static Node *make_decl_init_node(Type *type) {
+static Node *ast_decl(Type *type) {
     if(next_token(T_LBRACE)) {
         printf("make_decl_array_init\n");
         return make_decl_array_init(type);
