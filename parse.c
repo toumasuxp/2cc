@@ -64,7 +64,7 @@ static Node *ast_lvar(char *varname, Type *declator);
 static Type *make_decl_type(Token *token);
 static Type *make_primitive_type(int kind, int size);
 
-static Node *make_decl_and_init_node(Type *type, char *ident, Node *value);
+static Node *make_decl_and_init_node(Type *type, Node *var, Node *value);
 static Node *make_decl_node(Type *type, char *ident);
 
 static Node *make_func_call_node(Token *ident);
@@ -574,24 +574,28 @@ static Node *read_decl() {
     Type *basetype = make_decl_type(type);
     Type *declator = read_declator(&varname, basetype);
 
+    Node *var;
+    if(is_global) {
+        var = ast_gvar(varname, declator);
+        printf("set %s in global vars\n", varname);
+        map_set(global_vars, varname, var);
+    } else {
+        var = ast_lvar(varname, declator);
+        printf("set %s in local vars\n", varname);
+        vec_push(local_vars, var);
+    }
+
     Node *node;
     if(next_token(T_ASSIGN)) {
         printf("make_decl_and_init_node\n");
         Node *value = make_decl_init_node(declator);
-        node = make_decl_and_init_node(declator, varname, value);
+        node = make_decl_and_init_node(declator, var, value);
         printf("make_decl_and_init_node end\n");
     } else {
-        node = make_decl_and_init_node(declator, varname, NULL);
+        node = make_decl_and_init_node(declator, var, NULL);
     }
     ensure_token(T_SEMICOLON);
 
-    if(is_global) {
-        printf("set %s in global vars\n", varname);
-        map_set(global_vars, varname, ast_gvar(varname, declator));
-    } else {
-        printf("set %s in local vars\n", varname);
-        vec_push(local_vars, ast_lvar(varname, declator));
-    }
     return node;
 }
 
@@ -608,6 +612,7 @@ static Node *ast_lvar(char *varname, Type *declator) {
     node->kind = AST_LVAR;
     node->ident = varname;
     node->type = declator;
+
     return node;
 }
 
@@ -816,17 +821,12 @@ static Type *make_primitive_type(int kind, int size) {
     return type;
 }
 
-static Node *make_decl_and_init_node(Type *type, char *ident, Node *value) {
+static Node *make_decl_and_init_node(Type *type, Node *var, Node *value) {
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = is_global ? AST_GLOBAL_DECL : AST_LOCAL_DECL;
     node->type = type;
-    node->ident = ident;
+    node->var = var;
     node->val = value;
-    if(!is_global) {
-        loff -= type->size;
-        node->loff = loff;
-    }
-
     return node;
 }
 

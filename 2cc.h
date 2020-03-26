@@ -137,6 +137,7 @@ struct _Node {
         // variable declare
         struct {
             char *ident;
+            struct _Node *var;
             struct _Node *val;
             int loff;
         };

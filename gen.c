@@ -133,6 +133,7 @@ static void emit_func_prologue(Node *func) {
         Node *var = vec_get(func->local_vars, i);
         int size = var->type->size;
         off -= size;
+        printf("size is %d\n", off);
         var->loff = off;
         local_sizes += size;
     }
@@ -210,14 +211,14 @@ static void emit_local_decl(Node *node) {
         break;
     default:
         emit_expr(node->val);
-        emit_lsave(node->loff);
+        emit_lsave(node->var->loff);
     }
 }
 
 static void emit_local_data_array(Node *node) {
     Node *val;
     for(int i = 0; i < vec_len(node->val->array_init_list); i++) {
-        int loff = node->loff + node->type->pointer_type->size * i;
+        int loff = node->var->loff + node->type->pointer_type->size * i;
         Node *val = vec_get(node->val->array_init_list, i);
         emit_expr(val);
         emit_lsave(loff);
@@ -417,6 +418,7 @@ static void emit_gsave(Node *var) {
 }
 
 static void emit_lsave(int loff) {
+    printf("in emit_lsave, loff is %d\n", loff);
     char *reg = get_resigter_size();
     char *addr = format("%d(%%rbp)", loff);
     emit("mov %s, %s", reg, addr);
