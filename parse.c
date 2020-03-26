@@ -65,7 +65,6 @@ static Type *make_decl_type(Token *token);
 static Type *make_primitive_type(int kind, int size);
 
 static Node *make_decl_and_init_node(Type *type, Node *var, Node *value);
-static Node *make_decl_node(Type *type, char *ident);
 
 static Node *make_func_call_node(Token *ident);
 static Node *search_var(char *name);
@@ -827,16 +826,6 @@ static Node *make_decl_and_init_node(Type *type, Node *var, Node *value) {
     node->type = type;
     node->var = var;
     node->val = value;
-    return node;
-}
-
-static Node *make_decl_node(Type *type, char *ident) {
-    Node *node = (Node *)malloc(sizeof(Node));
-    node->kind = AST_GLOBAL_DECL;
-    node->type = type;
-    node->ident = ident;
-    node->val = NULL;
-
     return node;
 }
 
