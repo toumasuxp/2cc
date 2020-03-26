@@ -578,11 +578,9 @@ static Node *read_decl() {
     if(is_global) {
         var = ast_gvar(varname, declator);
         printf("set %s in global vars\n", varname);
-        map_set(global_vars, varname, var);
     } else {
         var = ast_lvar(varname, declator);
         printf("set %s in local vars\n", varname);
-        vec_push(local_vars, var);
     }
 
     Node *node;
@@ -600,20 +598,23 @@ static Node *read_decl() {
 }
 
 static Node *ast_gvar(char *varname, Type *declator) {
-    Node *node = (Node *)malloc(sizeof(Node));
-    node->kind = AST_GVAR;
-    node->ident = varname;
-    node->type = declator;
-    return node;
+    Node *var = (Node *)malloc(sizeof(Node));
+    var->kind = AST_GVAR;
+    var->ident = varname;
+    var->type = declator;
+
+    map_set(global_vars, varname, var);
+    return var;
 }
 
 static Node *ast_lvar(char *varname, Type *declator) {
-    Node *node = (Node *)malloc(sizeof(Node));
-    node->kind = AST_LVAR;
-    node->ident = varname;
-    node->type = declator;
+    Node *var = (Node *)malloc(sizeof(Node));
+    var->kind = AST_LVAR;
+    var->ident = varname;
+    var->type = declator;
 
-    return node;
+    vec_push(local_vars, var);
+    return var;
 }
 
 static Type *read_declator(char **name, Type *basetype) {
