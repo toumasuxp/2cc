@@ -55,6 +55,8 @@ static void emit_gvar(Node *node);
 
 static char *get_data_size(int size);
 static void emit_local_data_array(Node *node);
+static void emit_pointer_arith(int kind, Node *left, Node *right);
+static void emit_conv(Node *node);
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -260,6 +262,12 @@ static void emit_expr(Node *node) {
     case AST_FUNC_CALL:
         emit_func_call(node);
         break;
+    case AST_CONV:
+        emit_conv(node);
+        break;
+    case AST_SIMPLE_ASSIGN:
+        emit_assign(node);
+        break;
     case AST_GLOBAL_DECL:
         emit_global_decl(node);
         break;
@@ -284,6 +292,8 @@ static void emit_expr(Node *node) {
     }
 }
 
+static void emit_conv(Node *node) { emit_expr(node->operand); }
+
 static void emit_component(Node *node) {
     Vector *stmt = node->stmt;
 
@@ -303,11 +313,13 @@ static void emit_func_call(Node *node) {
 }
 
 static void emit_binary(Node *node) {
+    printf("emit_binary\n");
+    if(node->type->kind == TYPE_POINTER) {
+        emit_pointer_arith(node->kind, node->left, node->right);
+        return;
+    }
     char *op = NULL;
     switch(node->kind) {
-    case AST_SIMPLE_ASSIGN:
-        emit_assign(node);
-        return;
     case AST_EQUAL:
         emit_cmp("sete", node);
         return;
@@ -343,19 +355,50 @@ static void emit_binary(Node *node) {
     }
 }
 
+static void emit_pointer_arith(int kind, Node *left, Node *right) {
+    printf("emit_pointer_arith\n");
+    emit_expr(left);
+    push("rcx");
+    push("rax");
+    emit_expr(right);
+    int size = left->type->pointer_type->size;
+    if(size > 1)
+        emit("imul $%d, #rax", size);
+    emit("mov #rax, #rcx");
+    pop("rax");
+    switch(kind) {
+    case AST_ADD:
+        emit("add #rcx, #rax");
+        break;
+    case AST_SUB:
+        emit("sub #rcx, #rax");
+        break;
+    default:
+        printf("invalid operator '%d'\n", kind);
+        exit(1);
+    }
+    pop("rcx");
+}
+
 static void emit_assign(Node *node) {
     printf("emit_assign\n");
     push("rax");
+    emit_label("emit_assign");
+    emit_label("emit_assign_expr");
     emit_expr(node->right);
+    emit_label("emit_assign_expr_end");
     emit_store(node->left, node->left->kind);
+    emit_label("emit_assign_end");
 }
 
 static void emit_store(Node *node, int kind) {
     switch(kind) {
     case AST_DEREF:
         printf("emit_store AST_DEREF\n");
+        emit_label("emit_assign_deref");
         emit_assign_deref(node);
-        break;
+        emit_label("emit_assign_deref_end");
+        return;
     case AST_LVAR:
         printf("emit_store AST_LVAR\n");
         emit_lsave(node->loff);
@@ -475,12 +518,14 @@ static void emit_return(Node *node) {
 static void emit_deref(Node *node) {
     printf("emit_deref\n");
     emit_expr(node->operand);
-    emit_noindent(".emit_deref");
     emit_lload(node->operand, "rax");
 }
 
 static void emit_lload(Node *node, char *inst) {
-    emit("mov %d(#%s), #rax", node->loff, inst);
+    if(node->type->kind == TYPE_ARRAY) {
+        emit("lea %d(#%s), #rax", node->loff, inst);
+    } else
+        emit("mov %d(#%s), #rax", node->loff, inst);
 }
 
 static void emit_addr(Node *node) {

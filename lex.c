@@ -292,8 +292,6 @@ static Token *make_eof_token() {
 static Token *make_op_token(char c, int kind) {
     Token *tok = (Token *)malloc(sizeof(Token));
     tok->kind = kind;
-
-    printf("op token %c\n", c);
     return tok;
 }
 

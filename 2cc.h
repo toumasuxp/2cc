@@ -106,6 +106,7 @@ enum {
 
     AST_FUNCDEF,
     AST_FUNC_CALL,
+    AST_CONV,
 
     AST_ARRAY_INIT,
 
@@ -127,17 +128,14 @@ typedef struct _Param Param;
 
 struct _Node {
     int kind;
+    Type *type;
     union {
 
         // ident node
-        struct {
-            char *varname;
-            Type *ident_type;
-        };
+        char *varname;
 
         // variable declare
         struct {
-            Type *type;
             char *ident;
             struct _Node *val;
             int loff;

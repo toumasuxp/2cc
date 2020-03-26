@@ -41,21 +41,22 @@ static Node *make_assign_node();
 static Node *make_literal_node();
 static Node *make_mul_sub_node();
 static Node *make_add_sub_node();
-static Node *make_binary_node(int kind, Node *left, Node *right);
+static Node *ast_binop(Type *type, int kind, Node *left, Node *right);
+static Node *binop(int kind, Node *left, Node *right);
 static Node *make_actual_assign_node(Node *node, int ast_kind);
 static void *ensure_assign_node(Node *node);
-static Node *make_if_node();
+static Node *ast_if();
 static Node *make_cond_node();
-static Node *make_while_node();
-static Node *make_continue_node();
-static Node *make_break_node();
+static Node *ast_while();
+static Node *ast_continue();
+static Node *ast_break();
 static Node *make_return_node();
-static Node *make_newline_node();
-static Node *make_eof_node();
+static Node *ast_newline();
+static Node *ast_eof();
 static Node *read_stmt();
 static Node *read_decl();
 static Node *read_decl_or_stmt();
-static Node *make_component_node();
+static Node *ast_component();
 
 static Node *ast_gvar(char *varname, Type *declator);
 static Node *ast_lvar(char *varname, Type *declator);
@@ -83,6 +84,12 @@ static Type *read_declator_tail(char **name, Type *basetype);
 
 static Node *make_decl_init_node(Type *type);
 static Node *make_decl_array_init(Type *type);
+static Node *make_array_elm_node(Node *var);
+
+static Node *conv(Node *node);
+
+// 8ccにあった書き方。かっこいい
+Type *type_int = &(Type){TYPE_INT, 4};
 
 void parse_init() {
     top_levels = vec_init();
@@ -125,7 +132,7 @@ static Node *read_func() {
 static Node *make_func_body(Type *functype, char *name, Vector *params) {
     local_vars = vec_init();
     is_global = false;
-    Node *body = make_component_node();
+    Node *body = ast_component();
 
     Node *func = (Node *)malloc(sizeof(Node));
     func->kind = AST_FUNCDEF;
@@ -240,9 +247,23 @@ static void skip_parentheses(Vector *vector) {
     }
 }
 
-static Node *make_binary_node(int kind, Node *left, Node *right) {
+static Node *binop(int kind, Node *left, Node *right) {
+    printf("check left node is TYPE POINTER\n");
+    if(left->type->kind == TYPE_POINTER) {
+        return ast_binop(left->type, kind, left, right);
+    }
+    printf("check right node is TYPE POINTER\n");
+    if(right->type->kind == TYPE_POINTER) {
+        printf("end check right node is TYPE POINTER\n");
+        return ast_binop(right->type, kind, right, left);
+    }
+    return ast_binop(left->type, kind, right, left);
+}
+
+static Node *ast_binop(Type *type, int kind, Node *left, Node *right) {
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = kind;
+    node->type = type;
     node->left = left;
     node->right = right;
     return node;
@@ -253,6 +274,7 @@ static Node *make_literal_node() {
 
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_LITERAL;
+    node->type = type_int;
     char *val = get_token_val(token);
     node->int_val = atoi(val);
     return node;
@@ -271,7 +293,23 @@ static Node *make_ident_node() {
         printf("undefined variable: %s\n", name);
         exit(1);
     }
+
+    if(next_token(T_LBRACKET))
+        return make_array_elm_node(var);
     return var;
+}
+
+static Node *make_array_elm_node(Node *var) {
+    printf("make_array_elm_node\n");
+    Node *len = make_mul_sub_node();
+    ensure_token(T_RBRACKET);
+    Node *t = binop(AST_ADD, conv(var), len);
+
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_DEREF;
+    node->type = make_ptr_type(t->type);
+    node->operand = t;
+    return node;
 }
 
 static Node *make_func_call_node(Token *ident) {
@@ -314,6 +352,7 @@ static Node *search_var(char *name) {
 }
 
 static Node *make_primary_node() {
+    printf("primary node\n");
     if(expect_token(T_IDENT))
         return make_ident_node();
     else if(expect_token(T_LITERAL))
@@ -344,6 +383,7 @@ static Node *make_unary_deref_node() {
     }
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_DEREF;
+    node->type = operand->type;
     node->operand = operand;
     return node;
 }
@@ -362,9 +402,9 @@ static Node *make_mul_sub_node() {
     Node *node = make_unary_node();
 
     if(next_token(T_MUL))
-        return make_binary_node(AST_MUL, node, make_literal_node());
+        return binop(AST_MUL, node, make_literal_node());
     if(next_token(T_DIV))
-        return make_binary_node(AST_DIV, node, make_literal_node());
+        return binop(AST_DIV, node, make_literal_node());
 
     return node;
 }
@@ -373,9 +413,9 @@ static Node *make_add_sub_node() {
     Node *node = make_mul_sub_node();
 
     if(next_token(T_ADD))
-        return make_binary_node(AST_ADD, node, make_mul_sub_node());
+        return binop(AST_ADD, node, make_mul_sub_node());
     if(next_token(T_SUB))
-        return make_binary_node(AST_SUB, node, make_mul_sub_node());
+        return binop(AST_SUB, node, make_mul_sub_node());
 
     return node;
 }
@@ -384,13 +424,13 @@ static Node *make_relational_node() {
     Node *node = make_add_sub_node();
 
     if(next_token(T_LESS_EQ))
-        return make_binary_node(AST_LESS_EQ, node, make_add_sub_node());
+        return binop(AST_LESS_EQ, node, make_add_sub_node());
     else if(next_token(T_LESS))
-        return make_binary_node(AST_LESS, node, make_add_sub_node());
+        return binop(AST_LESS, node, make_add_sub_node());
     else if(next_token(T_GRE_EQ))
-        return make_binary_node(AST_GRE_EQ, node, make_add_sub_node());
+        return binop(AST_GRE_EQ, node, make_add_sub_node());
     else if(next_token(T_GRE))
-        return make_binary_node(AST_GRE, node, make_add_sub_node());
+        return binop(AST_GRE, node, make_add_sub_node());
 
     return node;
 }
@@ -399,7 +439,7 @@ static Node *make_equ_neq_node() {
     Node *node = make_relational_node();
 
     if(next_token(T_EQUAL))
-        return make_binary_node(AST_EQUAL, node, make_relational_node());
+        return binop(AST_EQUAL, node, make_relational_node());
 
     return node;
 }
@@ -408,7 +448,7 @@ static Node *make_logand_node() {
     Node *node = make_equ_neq_node();
 
     if(next_token(T_BIN_AND))
-        return make_binary_node(AST_LOG_AND, node, make_equ_neq_node());
+        return binop(AST_LOG_AND, node, make_equ_neq_node());
 
     return node;
 }
@@ -417,7 +457,7 @@ static Node *make_logor_node() {
     Node *node = make_logand_node();
 
     if(next_token(T_BIN_OR))
-        return make_binary_node(AST_LOG_OR, node, make_logand_node());
+        return binop(AST_LOG_OR, node, make_logand_node());
 
     return node;
 }
@@ -445,7 +485,7 @@ static Node *make_assign_node() {
 
 static Node *make_actual_assign_node(Node *node, int ast_kind) {
     ensure_assign_node(node);
-    return make_binary_node(ast_kind, node, make_logor_node());
+    return ast_binop(ast_kind, ast_kind, node, make_logor_node());
 }
 
 static void *ensure_assign_node(Node *node) {
@@ -458,14 +498,14 @@ static void *ensure_assign_node(Node *node) {
 
 static Node *make_cond_node() { return make_assign_node(); }
 
-static Node *make_if_node() {
+static Node *ast_if() {
     ensure_token(T_LPAREN);
     Node *cond = make_cond_node();
     ensure_token(T_RPAREN);
 
     Node *then;
     if(next_token(T_LBRACE)) {
-        then = make_component_node();
+        then = ast_component();
     } else {
         then = read_decl_or_stmt();
     }
@@ -477,7 +517,7 @@ static Node *make_if_node() {
     return node;
 }
 
-static Node *make_while_node() {
+static Node *ast_while() {
 
     ensure_token(T_LPAREN);
     Node *cond = make_cond_node();
@@ -490,7 +530,7 @@ static Node *make_while_node() {
     printf("while then\n");
 
     if(next_token(T_LBRACE)) {
-        then = make_component_node();
+        then = ast_component();
     } else {
         then = read_decl_or_stmt();
     }
@@ -509,19 +549,19 @@ static Node *read_stmt() {
     Token *token = lex();
     switch(get_token_kind(token)) {
     case T_LBRACE:
-        return make_component_node();
+        return ast_component();
     case T_IF:
-        return make_if_node();
+        return ast_if();
     case T_WHILE:
-        return make_while_node();
+        return ast_while();
     case T_BREAK:
-        return make_break_node();
+        return ast_break();
     case T_CONTINUE:
-        return make_continue_node();
+        return ast_continue();
     case T_RETURN:
         return make_return_node();
     case T_EOF:
-        return make_eof_node();
+        return ast_eof();
     default:
         unread_token(token);
         return make_assign_node();
@@ -591,8 +631,9 @@ static Type *read_declator(char **name, Type *basetype) {
 }
 
 static Type *read_declator_tail(char **name, Type *basetype) {
-    if(next_token(T_LBRACKET))
+    if(next_token(T_LBRACKET)) {
         return read_declator_tail_array(name, basetype);
+    }
 
     return basetype;
 }
@@ -693,7 +734,7 @@ static Node *make_return_node() {
     return node;
 }
 
-static Node *make_break_node() {
+static Node *ast_break() {
     if(lbreak == NULL) {
         printf("ERROR: unvalid break parser\n");
         exit(1);
@@ -704,7 +745,7 @@ static Node *make_break_node() {
     return node;
 }
 
-static Node *make_continue_node() {
+static Node *ast_continue() {
     if(lbreak == NULL) {
         printf("ERROR: unvalid continue parser\n");
         exit(1);
@@ -716,7 +757,7 @@ static Node *make_continue_node() {
     return node;
 }
 
-static Node *make_component_node() {
+static Node *ast_component() {
     Vector *component = vec_init();
 
     Node *self;
@@ -734,13 +775,13 @@ static Node *make_component_node() {
     return node;
 }
 
-static Node *make_newline_node() {
+static Node *ast_newline() {
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_NEWLINE;
     return node;
 }
 
-static Node *make_eof_node() {
+static Node *ast_eof() {
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_EOF;
     return node;
@@ -831,4 +872,24 @@ int eval_intval(Node *node) {
         printf("ERROR!! eval_intval\n");
         exit(1);
     }
+}
+
+/*
+ * Type conversion
+ */
+
+static Node *conv(Node *node) {
+    if(!node)
+        return NULL;
+
+    Node *ret = (Node *)malloc(sizeof(Node));
+    Type *ty = node->type;
+    switch(ty->kind) {
+    case TYPE_ARRAY:
+        ret->kind = AST_CONV;
+        ret->type = make_ptr_type(ty->pointer_type);
+        ret->operand = node;
+        return ret;
+    }
+    return node;
 }
