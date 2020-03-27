@@ -2,7 +2,7 @@
 
 static FILE *output_fp = NULL;
 
-static char *regs[] = {"rdi", "rsi", "rdx", "rcx", "r9", "r11"};
+static char *REGS[] = {"rdi", "rsi", "rdx", "rcx", "r9", "r11"};
 
 static void emit_global_decl(Node *node);
 
@@ -57,6 +57,11 @@ static char *get_data_size(int size);
 static void emit_local_data_array(Node *node);
 static void emit_pointer_arith(int kind, Node *left, Node *right);
 static void emit_conv(Node *node);
+
+static void emit_args(Vector *args);
+static void save_arg_regs(int len);
+static void restore_arg_regs(int len);
+static void pop_args(int len);
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -149,7 +154,7 @@ static void push_func_params(Vector *params) {
     for(int i = 0; i < vec_len(params); i++) {
         Param *param = vec_get(params, i);
 
-        push(regs[nreg++]);
+        push(REGS[nreg++]);
         off -= 8;
         param->loff = off;
     }
@@ -309,8 +314,34 @@ static void emit_gvar(Node *node) {}
 static void ensure_gvar_init(Node *node) { emit_expr(node); }
 
 static void emit_func_call(Node *node) {
-    // 引数をサポートしていないので、callを作成するだけ
+    save_arg_regs(vec_len(node->args));
+    emit_args(node->args);
+    pop_args(vec_len(node->args));
     emit("call %s", node->call_func_name);
+    restore_arg_regs(vec_len(node->args));
+}
+
+static void restore_arg_regs(int len) {
+    for(int i = len; i > 0; i--)
+        pop(REGS[i]);
+}
+
+static void save_arg_regs(int len) {
+    for(int i = 0; i < len; i++)
+        push(REGS[i]);
+}
+
+static void pop_args(int len) {
+    for(int i = len; i > 0; i--)
+        pop(REGS[i]);
+}
+
+static void emit_args(Vector *args) {
+    for(int i = 0; i < vec_len(args); i++) {
+        Node *v = vec_get(args, i);
+        emit_expr(v);
+        push("rax");
+    }
 }
 
 static void emit_binary(Node *node) {

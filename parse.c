@@ -32,9 +32,9 @@ static bool is_func();
 static void skip_parentheses(Vector *vector);
 static Param *make_decl_param();
 static void make_func_params(Vector *params);
-static Node *make_func_body(Type *functype, char *name, Vector *params);
+static Node *read_funcbody(Type *functype, char *name, Vector *params);
 
-static Type *make_func_type(char **name, Type *basetype, Vector *params);
+static Type *make_func_type(Type *rettype, Vector *params);
 
 static Node *make_ident_node();
 static Node *make_assign_node();
@@ -61,16 +61,19 @@ static Node *ast_component();
 static Node *ast_gvar(char *varname, Type *declator);
 static Node *ast_lvar(char *varname, Type *declator);
 
-static Type *make_decl_type(Token *token);
+static Type *make_decl_type();
 static Type *make_primitive_type(int kind, int size);
 
 static Node *make_decl_and_init_node(Type *type, Node *var, Node *value);
 
-static Node *make_func_call_node(Token *ident);
+static Node *read_funcall(Token *ident);
 static Node *search_var(char *name);
 
-static Type *read_declator(char **name, Type *basetype);
+static Type *read_declator(char **name, Type *basetype, Vector *params);
 static Type *make_ptr_type(Type *basetype);
+
+static Node *ast_func(Type *functype, char *name, Vector *params, Node *body,
+                      Vector *local_vars);
 
 static Node *make_unary_node();
 static Node *make_unary_addr_node();
@@ -78,14 +81,22 @@ static Node *make_unary_deref_node();
 
 static Type *make_array_type(Type *base, int len);
 
-static Type *read_declator_tail_array(char **name, Type *basetype);
-static Type *read_declator_tail(char **name, Type *basetype);
+static Type *read_declator_tail_array(char **name, Type *basetype,
+                                      Vector *params);
+static Type *read_declator_tail(char **name, Type *basetype, Vector *params);
 
 static Node *ast_decl(Type *type);
 static Node *make_decl_array_init(Type *type);
 static Node *make_array_elm_node(Node *var);
 
+static Type *read_declator_tail_func(char **name, Type *rettype,
+                                     Vector *params);
+static void read_declarator_params(Vector *types, Vector *vars);
+static Type *read_func_param(char **name, bool typeonly);
+
 static Node *conv(Node *node);
+static Node *ast_uop(int kind, Type *ty, Node *operand);
+static Vector *read_func_args(Vector *params);
 
 // 8ccにあった書き方。かっこいい
 Type *type_int = &(Type){TYPE_INT, 4};
@@ -109,30 +120,38 @@ void parse_toplevel() {
             printf("set parse func\n");
             vec_push(node_vec, read_func());
         } else {
+            printf("set parse read_decl\n");
             vec_push(node_vec, read_decl());
         }
     }
 }
 
 static Node *read_func() {
-    Token *token = lex();
-    Type *basetype = make_decl_type(token);
+    Type *basetype = make_decl_type();
     char *name;
     Vector *params = vec_init();
-    Type *functype = make_func_type(&name, basetype, params);
+    local_vars = vec_init();
+    is_global = false;
 
+    Type *functype = read_declator(&name, basetype, params);
+    ast_gvar(name, functype);
     ensure_token(T_LBRACE);
-    Node *body = make_func_body(functype, name, params);
+    Node *body = read_funcbody(functype, name, params);
 
-    map_set(global_vars, name, body);
+    is_global = true;
+    local_vars = NULL;
     return body;
 }
 
-static Node *make_func_body(Type *functype, char *name, Vector *params) {
-    local_vars = vec_init();
-    is_global = false;
+static Node *read_funcbody(Type *functype, char *name, Vector *params) {
     Node *body = ast_component();
+    Node *func = ast_func(functype, name, params, body, local_vars);
 
+    return func;
+}
+
+static Node *ast_func(Type *functype, char *name, Vector *params, Node *body,
+                      Vector *local_vars) {
     Node *func = (Node *)malloc(sizeof(Node));
     func->kind = AST_FUNCDEF;
     func->func_type = functype;
@@ -140,35 +159,19 @@ static Node *make_func_body(Type *functype, char *name, Vector *params) {
     func->params = params;
     func->body = body;
     func->local_vars = local_vars;
-
-    is_global = true;
-    local_vars = NULL;
     return func;
 }
 
-static Type *make_func_type(char **name, Type *basetype, Vector *params) {
-    Token *token = lex();
-
-    if(!is_token_kind(token, T_IDENT)) {
-        printf("unvalid function decl\n");
-        exit(1);
-    }
-    *name = get_token_val(token);
-
-    ensure_token(T_LPAREN);
-
-    make_func_params(params);
-
+static Type *make_func_type(Type *rettype, Vector *params) {
     Type *functype = (Type *)malloc(sizeof(Type));
-    functype->kind = basetype->kind;
+    functype->kind = TYPE_FUNC;
+    functype->rettype = rettype;
     functype->params = params;
-    functype->size = basetype->size;
     return functype;
 }
 
 static void make_func_params(Vector *params) {
     Token *token;
-
     for(;;) {
         if(next_token(T_RPAREN))
             break;
@@ -180,14 +183,14 @@ static void make_func_params(Vector *params) {
             if(next_token(T_COMMA))
                 continue;
         }
+
         ensure_token(T_RPAREN);
         break;
     }
 }
 
 static Param *make_decl_param() {
-    Token *type_token = lex();
-    Type *type = make_decl_type(type_token);
+    Type *type = make_decl_type();
 
     Token *ident = lex();
     if(is_token_kind(ident, T_IDENT)) {
@@ -202,6 +205,7 @@ static Param *make_decl_param() {
 }
 
 static bool is_func() {
+    printf("check is func\n");
     Vector *vector = vec_init();
     bool result = false;
     Token *token;
@@ -223,7 +227,6 @@ static bool is_func() {
         result = is_token_kind(token, T_LBRACE);
         break;
     }
-
     while(vec_len(vector) > 0)
         unread_token(vec_pop(vector));
 
@@ -283,7 +286,7 @@ static Node *make_ident_node() {
     Token *token = lex();
 
     if(next_token(T_LPAREN))
-        return make_func_call_node(token);
+        return read_funcall(token);
 
     char *name = get_token_val(token);
 
@@ -311,23 +314,40 @@ static Node *make_array_elm_node(Node *var) {
     return node;
 }
 
-static Node *make_func_call_node(Token *ident) {
-    Vector *args = vec_init();
+static Node *read_funcall(Token *ident) {
 
     char *id = get_token_val(ident);
     Node *func = map_get(global_vars, id);
-    if(func == NULL || func->kind != AST_FUNCDEF) {
+    if(func == NULL || func->type->kind != TYPE_FUNC) {
         printf("undefined function: %s\n", get_token_val(ident));
         exit(1);
     }
 
-    // とりあえず今回は引数なしのみ関数呼び出しをできるようにする
-    ensure_token(T_RPAREN);
+    Vector *args = read_func_args(func->params);
+
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_FUNC_CALL;
-    node->call_func_name = func->func_name;
-    node->call_func_type = func->func_type; // ここはいらないかも
+    node->call_func_name = id;
+    node->call_func_type = func->type->rettype; // ここはいらないかも
+    node->args = args;
     return node;
+}
+
+static Vector *read_func_args(Vector *params) {
+    Vector *args = vec_init();
+    int i = 0;
+    for(;;) {
+        if(next_token(T_RPAREN))
+            break;
+
+        Node *arg = conv(make_assign_node());
+        vec_push(args, arg);
+
+        if(next_token(T_RPAREN))
+            break;
+        ensure_token(T_COMMA);
+    }
+    return args;
 }
 
 static Node *search_var(char *name) {
@@ -569,9 +589,8 @@ static Node *read_stmt() {
 
 static Node *read_decl() {
     char *varname;
-    Token *type = lex();
-    Type *basetype = make_decl_type(type);
-    Type *declator = read_declator(&varname, basetype);
+    Type *basetype = make_decl_type();
+    Type *declator = read_declator(&varname, basetype, NULL);
 
     Node *var;
     if(is_global) {
@@ -587,7 +606,7 @@ static Node *read_decl() {
         printf("make_decl_and_init_node\n");
         node = make_decl_and_init_node(declator, var, ast_decl(declator));
         printf("make_decl_and_init_node end\n");
-    } else {
+    } else if(declator->kind != TYPE_FUNC) {
         node = make_decl_and_init_node(declator, var, NULL);
     }
     ensure_token(T_SEMICOLON);
@@ -610,18 +629,17 @@ static Node *ast_lvar(char *varname, Type *declator) {
     var->kind = AST_LVAR;
     var->ident = varname;
     var->type = declator;
-
     vec_push(local_vars, var);
     return var;
 }
 
-static Type *read_declator(char **name, Type *basetype) {
+static Type *read_declator(char **name, Type *basetype, Vector *params) {
     /* 本当は8ccのようにnext_token('*')という実装にするのが綺麗だけど、
        今回はこれでいく
     */
     if(next_token(T_MUL)) { // if pointer declare
         printf("pointer declater\n");
-        return read_declator(name, make_ptr_type(basetype));
+        return read_declator(name, make_ptr_type(basetype), params);
     }
 
     Token *token = lex();
@@ -631,18 +649,71 @@ static Type *read_declator(char **name, Type *basetype) {
     }
 
     *name = get_token_val(token);
-    return read_declator_tail(name, basetype);
+    return read_declator_tail(name, basetype, params);
 }
 
-static Type *read_declator_tail(char **name, Type *basetype) {
+static Type *read_declator_tail(char **name, Type *basetype, Vector *params) {
     if(next_token(T_LBRACKET)) {
-        return read_declator_tail_array(name, basetype);
+        return read_declator_tail_array(name, basetype, params);
+    }
+    if(next_token(T_LPAREN)) {
+        printf("read_declator_tail_func\n");
+        return read_declator_tail_func(name, basetype, params);
     }
 
     return basetype;
 }
 
-static Type *read_declator_tail_array(char **name, Type *basetype) {
+static Type *read_declator_tail_func(char **name, Type *rettype,
+                                     Vector *params) {
+
+    if(next_token(T_RPAREN))
+        return make_func_type(rettype, vec_init());
+
+    if(is_type(peek_token())) {
+        Vector *paramtypes = vec_init();
+        printf("read_declarator_params\n");
+        read_declarator_params(paramtypes, params);
+        return make_func_type(rettype, paramtypes);
+    }
+}
+
+static void read_declarator_params(Vector *types, Vector *vars) {
+    bool typeonly = !vars;
+
+    for(;;) {
+        char *name;
+        printf("read_func_param\n");
+        Type *ty = read_func_param(&name, typeonly);
+        vec_push(types, ty);
+        if(!typeonly) {
+            vec_push(vars, ast_lvar(name, ty));
+        }
+        if(next_token(T_RPAREN))
+            return;
+
+        ensure_token(T_COMMA);
+    }
+}
+
+static Type *read_func_param(char **name, bool typeonly) {
+    Type *basety = type_int;
+    if(is_type(peek_token())) {
+        basety = make_decl_type();
+    } else {
+        printf("ERROR unvalid error\n");
+        exit(1);
+    }
+    Type *ty = read_declator(name, basety, NULL);
+
+    if(ty->kind == TYPE_ARRAY)
+        return make_ptr_type(ty->pointer_type);
+
+    return ty;
+}
+
+static Type *read_declator_tail_array(char **name, Type *basetype,
+                                      Vector *params) {
     int len;
 
     if(next_token(T_RBRACKET))
@@ -793,7 +864,8 @@ static Node *ast_eof() {
 
 Vector *get_top_levels() { return node_vec; }
 
-static Type *make_decl_type(Token *token) {
+static Type *make_decl_type() {
+    Token *token = lex();
     switch(get_token_kind(token)) {
     case T_INT:
         return make_primitive_type(TYPE_INT, 4);
@@ -871,14 +943,20 @@ static Node *conv(Node *node) {
     if(!node)
         return NULL;
 
-    Node *ret = (Node *)malloc(sizeof(Node));
     Type *ty = node->type;
     switch(ty->kind) {
     case TYPE_ARRAY:
-        ret->kind = AST_CONV;
-        ret->type = make_ptr_type(ty->pointer_type);
-        ret->operand = node;
-        return ret;
+        return ast_uop(AST_CONV, make_ptr_type(ty->pointer_type), node);
+    case TYPE_FUNC:
+        return ast_uop(AST_ADDR, make_ptr_type(ty), node);
     }
     return node;
+}
+
+static Node *ast_uop(int kind, Type *ty, Node *operand) {
+    Node *ret = (Node *)malloc(sizeof(Node));
+    ret->kind = AST_CONV;
+    ret->type = make_ptr_type(ty);
+    ret->operand = operand;
+    return ret;
 }
