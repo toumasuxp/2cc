@@ -4,6 +4,7 @@ struct _Token {
     int kind;
     char *val;
     bool is_type;
+    int len;
 };
 
 struct KeyWord {
@@ -47,11 +48,16 @@ static Token *make_kind_token(int kind);
 static Token *make_op_token(char c, int kind);
 static Token *make_keyword_token(char *buf);
 
+static Token *read_string();
+static Token *make_str_token(char *str, int len);
+
 static bool is_keyword(char *buf);
 
 int get_token_kind(Token *token) { return token->kind; }
 
 char *get_token_val(Token *token) { return token->val; }
+
+int get_token_len(Token *token) { return token->len; }
 
 void lex_init() {
     token_buf = vec_init();
@@ -91,6 +97,8 @@ Token *lex() {
             return read_and();
         case '|':
             return read_or();
+        case '"':
+            return read_string();
 #define op(c, t)                                                               \
     case c:                                                                    \
         return make_op_token(c, t);
@@ -287,6 +295,32 @@ static Token *make_eof_token() {
     Token *tok = (Token *)malloc(sizeof(Token));
     tok->kind = T_EOF;
     return tok;
+}
+
+static Token *read_string() {
+    Buffer *buf = make_buffer();
+    for(;;) {
+        int c = readc();
+        if(c == EOF) {
+            printf("error read_string error\n");
+            exit(1);
+        }
+
+        if(c == '"')
+            break;
+
+        buf_write(buf, c);
+    }
+    buf_write(buf, '\0');
+    return make_str_token(buf_get_body(buf), buf_get_len(buf));
+}
+
+static Token *make_str_token(char *str, int len) {
+    Token *token = (Token *)malloc(sizeof(Token));
+    token->kind = T_STRING;
+    token->val = str;
+    token->len = len;
+    return token;
 }
 
 static Token *make_op_token(char c, int kind) {

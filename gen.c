@@ -63,6 +63,8 @@ static void save_arg_regs(int len);
 static void restore_arg_regs(int len);
 static void pop_args(int len);
 
+static void emit_global_string(Node *val);
+
 static void push(char *reg);
 static void pop(char *reg);
 
@@ -169,7 +171,7 @@ static void emit_ret() {
 
 static void emit_global_decl(Node *node) {
     emit(".data");
-    emit_label(node->ident);
+    emit_label(node->var->ident);
     emit_global_data(node);
 }
 
@@ -231,20 +233,46 @@ static void emit_local_data_array(Node *node) {
 }
 
 static void emit_data_primitive(Node *val, Type *type) {
-    switch(type->size) {
-    case 1:
+    switch(type->kind) {
+    case TYPE_CHAR:
         emit(".byte %d", eval_intval(val));
         break;
-    case 2:
-        emit(".word %d", eval_intval(val));
-        break;
-    case 4:
+    case TYPE_INT:
         emit(".int %d", eval_intval(val));
+        break;
+    case TYPE_POINTER:
+        if(val->type->kind == TYPE_ARRAY &&
+           val->type->pointer_type->kind == TYPE_CHAR)
+            emit_global_string(val);
+
         break;
     }
 }
 
-static void emit_literal(Node *node) { emit("mov $%d, #rax", node->int_val); }
+static void emit_global_string(Node *val) {
+    char *label = make_label();
+    emit(".data");
+    emit_label(label);
+    emit(".string \"%s\"", val->literal_val);
+    emit(".data");
+    emit(".quad %s", label);
+}
+
+static void emit_literal(Node *node) {
+    switch(node->type->kind) {
+    case TYPE_ARRAY: // string "hello world"
+        if(!node->slabel) {
+            emit_noindent(".data");
+            node->slabel = make_label();
+            emit_label(node->slabel);
+            emit(".string \"%s\"", node->literal_val);
+            emit_noindent(".text");
+        }
+        emit("lea %s(#rip), #rax", node->slabel);
+    default:
+        emit("mov $%d, #rax", node->int_val);
+    }
+}
 
 static void emit_expr(Node *node) {
     switch(node->kind) {

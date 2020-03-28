@@ -1,4 +1,4 @@
-int sasa(int x, int y);
+char *str = "hello world";
 
 int hoge(int x, int y){
     int hello = 54;

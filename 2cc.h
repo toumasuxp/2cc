@@ -47,6 +47,7 @@ enum {
     T_LONG,
     T_FLOAT,
     T_DOUBLE,
+    T_STRING,
 
     T_LPAREN,
     T_RPAREN,
@@ -130,6 +131,7 @@ typedef struct _Param Param;
 struct _Node {
     int kind;
     Type *type;
+    char *slabel;
     union {
 
         // ident node
@@ -144,7 +146,10 @@ struct _Node {
         };
 
         // literal
-        int int_val;
+        struct {
+            int int_val;
+            char *literal_val;
+        };
 
         // binary calc ex) + - %
         struct {
@@ -225,6 +230,7 @@ void lex_init();
 Token *lex();
 int get_token_kind(Token *token);
 char *get_token_num(Token *token);
+int get_token_len(Token *token);
 bool next_token(int kind);
 void unread_token(Token *token);
 Token *peek_token();

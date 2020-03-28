@@ -100,6 +100,7 @@ static Vector *read_func_args(Vector *params);
 
 // 8ccにあった書き方。かっこいい
 Type *type_int = &(Type){TYPE_INT, 4};
+Type *type_char = &(Type){TYPE_CHAR, 1};
 
 void parse_init() {
     top_levels = vec_init();
@@ -271,14 +272,26 @@ static Node *ast_binop(Type *type, int kind, Node *left, Node *right) {
     return node;
 }
 
+static Node *make_string_node() {
+    Token *token = lex();
+    Type *type = make_array_type(type_char, get_token_len(token));
+    char *body = get_token_val(token);
+
+    Node *node = (Node *)malloc(sizeof(Node));
+    node->kind = AST_LITERAL;
+    node->type = type;
+    node->literal_val = body;
+    return node;
+}
+
 static Node *make_literal_node() {
     Token *token = lex();
 
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_LITERAL;
     node->type = type_int;
-    char *val = get_token_val(token);
-    node->int_val = atoi(val);
+    char *literal_val = get_token_val(token);
+    node->int_val = atoi(literal_val);
     return node;
 }
 
@@ -376,6 +389,8 @@ static Node *make_primary_node() {
         return make_ident_node();
     else if(expect_token(T_LITERAL))
         return make_literal_node();
+    else if(expect_token(T_STRING))
+        return make_string_node();
 
     // 最後にreturnをしているのは特に意味はない
     return make_literal_node();
@@ -504,7 +519,7 @@ static Node *make_assign_node() {
 
 static Node *make_actual_assign_node(Node *node, int ast_kind) {
     ensure_assign_node(node);
-    return ast_binop(ast_kind, ast_kind, node, make_logor_node());
+    return ast_binop(node->left->type, ast_kind, node, make_logor_node());
 }
 
 static void *ensure_assign_node(Node *node) {
