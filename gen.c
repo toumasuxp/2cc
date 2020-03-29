@@ -430,6 +430,7 @@ static void emit_pointer_arith(int kind, Node *left, Node *right) {
     push("rcx");
     push("rax");
     emit_expr(right);
+    // ここの処理が微妙
     int size = left->type->pointer_type->size;
     if(size > 1)
         emit("imul $%d, #rax", size);

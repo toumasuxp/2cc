@@ -320,11 +320,11 @@ static Node *make_array_elm_node(Node *var) {
     printf("make_array_elm_node\n");
     Node *len = make_mul_sub_node();
     ensure_token(T_RBRACKET);
-    Node *t = binop(AST_ADD, conv(var), len);
+    Node *t = binop(AST_ADD, conv(var), conv(len));
 
     Node *node = (Node *)malloc(sizeof(Node));
     node->kind = AST_DEREF;
-    node->type = make_ptr_type(t->type);
+    node->type = make_ptr_type(t->type->pointer_type);
     node->operand = t;
     return node;
 }
@@ -980,7 +980,7 @@ static Node *conv(Node *node) {
 static Node *ast_uop(int kind, Type *ty, Node *operand) {
     Node *ret = (Node *)malloc(sizeof(Node));
     ret->kind = AST_CONV;
-    ret->type = make_ptr_type(ty);
+    ret->type = ty;
     ret->operand = operand;
     return ret;
 }
