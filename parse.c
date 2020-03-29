@@ -102,6 +102,8 @@ static Vector *read_func_args(Vector *params);
 Type *type_int = &(Type){TYPE_INT, 4};
 Type *type_char = &(Type){TYPE_CHAR, 1};
 
+Node *ast_semicolon = &(Node){AST_SEMICOLON};
+
 void parse_init() {
     top_levels = vec_init();
     node_vec = vec_init();
@@ -260,7 +262,7 @@ static Node *binop(int kind, Node *left, Node *right) {
         printf("end check right node is TYPE POINTER\n");
         return ast_binop(right->type, kind, right, left);
     }
-    return ast_binop(left->type, kind, right, left);
+    return ast_binop(left->type, kind, left, right);
 }
 
 static Node *ast_binop(Type *type, int kind, Node *left, Node *right) {
@@ -436,9 +438,9 @@ static Node *make_mul_sub_node() {
     Node *node = make_unary_node();
 
     if(next_token(T_MUL))
-        return binop(AST_MUL, node, make_literal_node());
+        return binop(AST_MUL, node, make_unary_node());
     if(next_token(T_DIV))
-        return binop(AST_DIV, node, make_literal_node());
+        return binop(AST_DIV, node, make_unary_node());
 
     return node;
 }
@@ -500,19 +502,19 @@ static Node *make_assign_node() {
     Node *node = make_logor_node();
 
     if(next_token(T_ASSIGN))
-        return make_actual_assign_node(node, AST_SIMPLE_ASSIGN);
+        node = make_actual_assign_node(node, AST_SIMPLE_ASSIGN);
 
     if(next_token(T_ADD_ASSIGN))
-        return make_actual_assign_node(node, AST_ADD_ASSIGN);
+        node = make_actual_assign_node(node, AST_ADD_ASSIGN);
 
     if(next_token(T_SUB_ASSIGN))
-        return make_actual_assign_node(node, AST_SUB_ASSIGN);
+        node = make_actual_assign_node(node, AST_SUB_ASSIGN);
 
     if(next_token(T_MUL_ASSIGN))
-        return make_actual_assign_node(node, AST_MUL_ASSIGN);
+        node = make_actual_assign_node(node, AST_MUL_ASSIGN);
 
     if(next_token(T_DIV_ASSIGN))
-        return make_actual_assign_node(node, AST_DIV_ASSIGN);
+        node = make_actual_assign_node(node, AST_DIV_ASSIGN);
 
     return node;
 }
@@ -594,17 +596,24 @@ static Node *read_stmt() {
         return ast_continue();
     case T_RETURN:
         return make_return_node();
+    case T_SEMICOLON:
+        return ast_semicolon;
     case T_EOF:
         return ast_eof();
     default:
         unread_token(token);
-        return make_assign_node();
     }
+    Node *node = make_assign_node();
+    ensure_token(T_SEMICOLON);
+    return node;
 }
 
 static Node *read_decl() {
     char *varname;
     Type *basetype = make_decl_type();
+    if(next_token(T_SEMICOLON))
+        return ast_semicolon;
+
     Type *declator = read_declator(&varname, basetype, NULL);
 
     Node *var;

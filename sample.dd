@@ -1,12 +1,1 @@
-char *str = "hello world";
-
-int hoge(int x, int y){
-    int hello = 54;
-    int foo[] = {3, 4,5};
-    hello = foo[1]
-    return 1;
-}
-
-int main(){
-    hoge(2, 4)
-}
+int main(){return 4 * 4;}

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 // types
 
@@ -99,6 +100,7 @@ enum {
     AST_ADDR,
     AST_CONTINUE,
     AST_NEWLINE,
+    AST_SEMICOLON,
 
     AST_SIMPLE_ASSIGN,
     AST_ADD_ASSIGN,
@@ -223,6 +225,7 @@ int readc();
 bool expectc(int c);
 void unreadc(int c);
 void skip_space();
+File *current_file();
 
 // lex.c
 

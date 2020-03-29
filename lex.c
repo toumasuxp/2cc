@@ -85,6 +85,8 @@ Token *lex() {
             return read_equal();
         case '+':
             return read_plus();
+        case '-':
+            return read_sub();
         case '*':
             return read_mult();
         case '/':
@@ -142,7 +144,8 @@ void ensure_token(int kind) {
     if(get_token_kind(token) == kind) {
         return;
     } else {
-        printf("ERROR: invalid token %d\n", get_token_kind(token));
+        printf("ERROR: ensure_token expected %d, actual %d\n",
+               get_token_kind(token), kind);
         exit(1);
     }
 }

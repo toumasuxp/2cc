@@ -64,6 +64,8 @@ static void restore_arg_regs(int len);
 static void pop_args(int len);
 
 static void emit_global_string(Node *val);
+static void emit_global(char *label);
+static void emit_gload(Node *node, char *inst);
 
 static void push(char *reg);
 static void pop(char *reg);
@@ -89,6 +91,8 @@ void gen_toplevel(Vector *toplevel) {
             break;
         case AST_FUNCDEF:
             emit_funcdef(node);
+            break;
+        case AST_SEMICOLON:
             break;
         case AST_END:
             return;
@@ -127,6 +131,8 @@ static void emit_funcdef(Node *func) {
 }
 
 static void emit_func_prologue(Node *func) {
+    emit_noindent(".text");
+    emit_global(func->func_name);
     emit_label(func->func_name);
 
     push("rbp");
@@ -171,8 +177,10 @@ static void emit_ret() {
 
 static void emit_global_decl(Node *node) {
     emit(".data");
+    emit_global(node->var->ident);
     emit_label(node->var->ident);
     emit_global_data(node);
+    emit(".text");
 }
 
 static void emit_global_data(Node *node) {
@@ -338,7 +346,8 @@ static void emit_component(Node *node) {
 
 static void emit_lvar(Node *node) { emit_lload(node, "rbp"); }
 
-static void emit_gvar(Node *node) {}
+static void emit_gvar(Node *node) { emit_gload(node, "rip"); }
+
 static void ensure_gvar_init(Node *node) { emit_expr(node); }
 
 static void emit_func_call(Node *node) {
@@ -473,7 +482,7 @@ static void emit_store(Node *node, int kind) {
 static void emit_gsave(Node *var) {
     char *reg = get_resigter_size();
     char *addr = format("%s(%%rip)", var->ident);
-    emit("mov %s, %s", reg, addr);
+    emit("mov #%s, %s", reg, addr);
 }
 
 static void emit_lsave(int loff) {
@@ -589,6 +598,13 @@ static void emit_lload(Node *node, char *inst) {
         emit("mov %d(#%s), #rax", node->loff, inst);
 }
 
+static void emit_gload(Node *node, char *inst) {
+    if(node->type->kind == TYPE_ARRAY) {
+        emit("lea %s(#%s), #rax", node->ident, inst);
+    } else
+        emit("mov %s(#%s), #rax", node->ident, inst);
+}
+
 static void emit_addr(Node *node) {
     printf("emit_addr\n");
     switch(node->kind) {
@@ -621,3 +637,5 @@ char *make_label() {
     static int c = 0;
     return format(".L%d", c++);
 }
+
+static void emit_global(char *label) { emit(".global %s", label); }

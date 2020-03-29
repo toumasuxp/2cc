@@ -2,13 +2,14 @@
 
 struct _File {
     FILE *fp;
+    char *file_str;
     int column;
     int line;
     int buf[10];
     int buf_len;
 };
 
-static File *main_file;
+static Vector *files;
 
 static int is_whitespace(int c);
 static int read_file_buf();
@@ -17,9 +18,12 @@ static int is_whitespace(int c) {
     return (c == ' ' || c == '\t' || c == '\f' || c == '\v');
 }
 
-static int read_file_buf() { return main_file->buf[--main_file->buf_len]; }
+static int read_file_buf() {
+    return current_file()->buf[--current_file()->buf_len];
+}
 
 void file_init(char *filename) {
+    files = vec_init();
     FILE *fp;
     if((fp = fopen(filename, "r")) == NULL) {
         printf("cannot open file\n");
@@ -31,23 +35,24 @@ void file_init(char *filename) {
     file->column = 1;
     file->line = 1;
     file->buf_len = 0;
-    main_file = file;
+
+    vec_push(files, file);
 }
 
 int readc() {
     int c;
 
-    if(main_file->buf_len > 0) {
+    if(current_file()->buf_len > 0) {
         c = read_file_buf();
     } else {
-        c = getc(main_file->fp);
+        c = getc(current_file()->fp);
     }
 
     if(c == '\n') {
-        main_file->line++;
-        main_file->column = 1;
+        current_file()->line++;
+        current_file()->column = 1;
     } else {
-        main_file->column++;
+        current_file()->column++;
     }
     return c;
 }
@@ -65,13 +70,13 @@ void unreadc(int c) {
     if(c == EOF)
         return;
 
-    main_file->buf[main_file->buf_len++] = c;
+    current_file()->buf[current_file()->buf_len++] = c;
 
     if(c == '\n') {
-        main_file->column = 1;
-        main_file->line--;
+        current_file()->column = 1;
+        current_file()->line--;
     } else {
-        main_file->column--;
+        current_file()->column--;
     }
 }
 
@@ -88,3 +93,5 @@ void skip_space() {
         }
     }
 }
+
+File *current_file() { return vec_tail(files); }
