@@ -50,7 +50,7 @@ static void emit_lvar(Node *node);
 
 static void emit_local_decl(Node *node);
 
-static void emit_lload(Node *node, char *inst);
+static void emit_lload(Type *type, int off, char *inst);
 static void emit_gvar(Node *node);
 
 static char *get_data_size(int size);
@@ -344,7 +344,7 @@ static void emit_component(Node *node) {
         emit_expr(vec_get(stmt, i));
 }
 
-static void emit_lvar(Node *node) { emit_lload(node, "rbp"); }
+static void emit_lvar(Node *node) { emit_lload(node->type, node->loff, "rbp"); }
 
 static void emit_gvar(Node *node) { emit_gload(node, "rip"); }
 
@@ -489,7 +489,7 @@ static void emit_lsave(int loff) {
     printf("in emit_lsave, loff is %d\n", loff);
     char *reg = get_resigter_size();
     char *addr = format("%d(%%rbp)", loff);
-    emit("mov %s, %s", reg, addr);
+    emit("mov #%s, %s", reg, addr);
 }
 
 static void emit_assign_deref(Node *node) {
@@ -588,14 +588,14 @@ static void emit_return(Node *node) {
 static void emit_deref(Node *node) {
     printf("emit_deref\n");
     emit_expr(node->operand);
-    emit_lload(node->operand, "rax");
+    emit_lload(node->operand->type->pointer_type, 0, "rax");
 }
 
-static void emit_lload(Node *node, char *inst) {
-    if(node->type->kind == TYPE_ARRAY) {
-        emit("lea %d(#%s), #rax", node->loff, inst);
+static void emit_lload(Type *type, int off, char *inst) {
+    if(type->kind == TYPE_ARRAY) {
+        emit("lea %d(#%s), #rax", off, inst);
     } else
-        emit("mov %d(#%s), #rax", node->loff, inst);
+        emit("mov %d(#%s), #rax", off, inst);
 }
 
 static void emit_gload(Node *node, char *inst) {
