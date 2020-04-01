@@ -5,6 +5,8 @@ struct _Token {
     char *val;
     bool is_type;
     int len;
+    // その行の最初のトークンかどうか。もっと良い命名はないのか。
+    bool is_first_token;
 };
 
 struct KeyWord {
@@ -12,6 +14,8 @@ struct KeyWord {
     char *ident;
     bool is_type;
 };
+
+static bool is_first_token = true;
 
 static struct KeyWord keywords[] = {
     {T_IF, "if", false},         {T_WHILE, "while", false},
@@ -26,6 +30,7 @@ static struct KeyWord keywords[] = {
 
 static Vector *token_buf = NULL;
 
+static Token *make_token(int kind);
 static Token *read_number(int c);
 static Token *read_ident(int c);
 static Token *make_literal_token(char *num);
@@ -107,6 +112,8 @@ Token *lex() {
 #include "opcode.inc"
 #undef op
         case '\n':
+            is_first_token = true;
+            continue;
         case '\r':
             continue;
         case EOF:
@@ -203,22 +210,19 @@ static Token *read_equal() {
 }
 
 static Token *make_equal_token() {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_EQUAL;
+    Token *tok = make_token(T_EQUAL);
     tok->val = NULL;
     return tok;
 }
 
 static Token *make_assign_token() {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_ASSIGN;
+    Token *tok = make_token(T_ASSIGN);
     tok->val = NULL;
     return tok;
 }
 
 static Token *make_literal_token(char *num) {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_LITERAL;
+    Token *tok = make_token(T_LITERAL);
     tok->val = num;
     tok->is_type = false;
     return tok;
@@ -226,39 +230,33 @@ static Token *make_literal_token(char *num) {
 
 static Token *make_ident_token(char *buf) {
     printf("T_IDENT token\n");
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_IDENT;
+    Token *tok = make_token(T_IDENT);
     tok->val = buf;
     return tok;
 }
 
 static Token *make_newline_token() {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_NEWLINE;
+    Token *tok = make_token(T_NEWLINE);
     return tok;
 }
 
 static Token *read_plus() {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_ADD;
+    Token *tok = make_token(T_ADD);
     return tok;
 }
 
 static Token *read_sub() {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_SUB;
+    Token *tok = make_token(T_SUB);
     return tok;
 }
 
 static Token *read_mult() {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_MUL;
+    Token *tok = make_token(T_MUL);
     return tok;
 }
 
 static Token *read_div() {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_DIV;
+    Token *tok = make_token(T_DIV);
     return tok;
 }
 
@@ -289,14 +287,12 @@ static Token *read_or() {
 }
 
 static Token *make_kind_token(int kind) {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = kind;
+    Token *tok = make_token(kind);
     return tok;
 }
 
 static Token *make_eof_token() {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = T_EOF;
+    Token *tok = make_token(T_EOF);
     return tok;
 }
 
@@ -319,16 +315,14 @@ static Token *read_string() {
 }
 
 static Token *make_str_token(char *str, int len) {
-    Token *token = (Token *)malloc(sizeof(Token));
-    token->kind = T_STRING;
+    Token *token = make_token(T_STRING);
     token->val = str;
     token->len = len;
     return token;
 }
 
 static Token *make_op_token(char c, int kind) {
-    Token *tok = (Token *)malloc(sizeof(Token));
-    tok->kind = kind;
+    Token *tok = make_token(kind);
     return tok;
 }
 
@@ -361,11 +355,19 @@ static Token *make_keyword_token(char *buf) {
     int i;
     for(i = 0; keywords[i].kind != T_DUMMY; i++) {
         if(!strcmp(buf, keywords[i].ident)) {
-            Token *token = (Token *)malloc(sizeof(Token));
-            token->kind = keywords[i].kind;
+            Token *token = make_token(keywords[i].kind);
             token->is_type = keywords[i].is_type;
             return token;
         }
     }
     return NULL;
+}
+
+static Token *make_token(int kind) {
+    Token *token = (Token *)malloc(sizeof(Token));
+    token->kind = kind;
+    token->is_first_token = is_first_token;
+
+    is_first_token = false;
+    return token;
 }

@@ -56,6 +56,7 @@ enum {
     T_RBRACE,
     T_LBRACKET,
     T_RBRACKET,
+    T_SHARP,
     T_SEMICOLON,
     T_COMMA,
     T_EOF,
