@@ -369,7 +369,7 @@ static void save_arg_regs(int len) {
 }
 
 static void pop_args(int len) {
-    for(int i = len; i > 0; i--)
+    for(int i = len - 1; i >= 0; i--)
         pop(REGS[i]);
 }
 

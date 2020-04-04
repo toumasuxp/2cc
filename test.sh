@@ -16,16 +16,18 @@ try(){
     ./tmp
     actual="$?"
 
-    rm $tmpfile sample.s sample.o tmp
+    rm $tmpfile sample.o tmp
     echo -n "$title => "
     if [ $actual == $expected ]; then
           echo -e "\e[32m OK \e[m"
+          rm sample.s
     else
         echo -e "\e[31m NG \e[m: $expected expected, but got $actual"
         exit 1
     fi
 }
 
+try "function call" 5 "int foo(){return 4 + 1;} int main(){return foo();}"
 try "literal test" 1 "int main(){ return 1;}"
 try "add test" 5 "int main(){return 2 + 3;}"
 try "sub test" 10 "int main(){return 15 - 5;}"
